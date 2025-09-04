@@ -1,3 +1,3 @@
 numpy
 matplotlib
-h5pu
+h5py
