@@ -1,4 +1,4 @@
-function Calib_visualisation(dirIn,filemane,CamID,Nplane)
+function Calib_visualisation(dirIn,Calib_path,CamID,Nplanes)
 
 %% Plot the calibration points on the raw image in order to check if the calibration is good 
 %% Input 
@@ -13,29 +13,27 @@ function Calib_visualisation(dirIn,filemane,CamID,Nplane)
 
 
 %%Load the calibration and definition of pimg
-calib_path=fullfile(dirIn,filemane);
-load(calib_path);
-
+% calib_path=sprintf('%s/calib2D_%d_cam%d.mat',dirIn, Nplane, CamID);
+% calib = load(calib_path);
+A = open(Calib_path);
+calib = A.calib;
 
 %%Load the image file
-for kcam=CamID
-    PimgX=calib(Nplane,kcam).pimg(:,1);
-    PimgY=calib(Nplane,kcam).pimg(:,2);
-    f1=figure('numberTitle','off','Name',sprintf('PX -- Cam %d',kcam))
-    filename = sprintf('%s/CalibrationPlan_%d_cam%d.%s',dirIn, Nplane, kcam,'tif');        
-    Img=imread(filename);
-    imshow(Img);
-    hold on 
-    plot(PimgX,PimgY,'rx',LineWidth=3);
-
-    [x_rw,y_rw] = transformPointsInverse(calib(Nplane,kcam).T3rw2px,PimgX,PimgY);%invert(calib(Nplane,kcam).T1px2rw)
-     f2=figure('numberTitle','off','Name',sprintf('RW -- Cam %d',kcam))
-     plot(x_rw,y_rw,'*')
-
-
-
-    PimgX=[];
-    PimgY=[];
-    filename=[];
-end
+for z=Nplanes
+    for kcam=CamID
+        kcam
+        PimgX=calib(z,kcam).pimg(:,1);  % x positions
+        PimgY=calib(z,kcam).pimg(:,2);  % y positions
+        figure('numberTitle','off','Name',sprintf('Cam %d',kcam))
+        filename = sprintf('%s/MyCalibration_cam%d_%03d.%s',dirIn, kcam, z, 'tif');
+        Img=imread(filename);
+        imagesc(Img); colormap(gray);
+        hold on
+        plot(PimgX,PimgY,'o');
+        fname = ['Plane ' num2str(z) ', camera ' num2str(kcam)];
+        title(fname);
+        PimgX=[];
+        PimgY=[];
+        filename=[];
+    end
 end 

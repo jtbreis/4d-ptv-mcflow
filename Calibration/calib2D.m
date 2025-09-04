@@ -88,7 +88,7 @@ while strcmpi(redo, 'y')
     h2 = subplot('position', [0.02 0.08 0.37 0.15]);
     h3 = subplot('position', [0.4 0.08 0.59 0.8]);
     subplot(h1);
-    imagesc(Iimg); %colormap(gray);
+    imagesc(Iimg); colormap(gray);
     set(gcf, 'Position', get(0, 'Screensize')); hold on;
     title(fname);
     
@@ -173,7 +173,7 @@ end
 
 Np = length(xc); % number of detected dots
 
-% % manually remove/add/displace some points if it's more convenient
+%% manually remove/add/displace some points if it's more convenient
 ind = ones(Np,1);
 nrm = 0;
 title({'Please click the particle centers that you want to remove. Right click the mouse when you are done.','defaut: suppress mode, a : adding mode, d: displacement mode'});
@@ -272,16 +272,16 @@ hold on;
 plot(xc, yc, 'r+');
 hold off
 
-% select base vectors in correct order (center, right and then top)
+%% Select base vectors in correct order (center, right and then top)
 title('Now please indicate the three base point on the mask by click mouse on the thresholded image in order [0 0], [1 0], [0 1].');
 
 % select and identify first base point: center
 but = 0;
 while but ~= 1
-    [x0 y0 but] = ginput(1);
+    [x0, y0, but] = ginput(1);
 end
 dist = (xc-x0).^2+(yc-y0).^2;
-[mindist i0] = min(dist);
+[mindist, i0] = min(dist);
 subplot(h3);
 hold on
 plot(xc(i0), yc(i0), 'bo');
@@ -292,27 +292,25 @@ i0yind = 0;
 % select and identify second base point: east 
 but = 0;
 while but ~= 1
-    [x1 y1 but] = ginput(1);
+    [x1, y1, but] = ginput(1);
 end
 dist = (xc-x1).^2+(yc-y1).^2;
-[mindist i1] = min(dist);
+[mindist, i1] = min(dist);
 plot(xc(i1), yc(i1), 'bo');
-
 i1xind = 1;
 i1yind = 0;
 
 % select and identify third base point: north
 but = 0;
 while but ~= 1
-    [x2 y2 but] = ginput(1);
+    [x2, y2, but] = ginput(1);
 end
 dist = (xc-x2).^2+(yc-y2).^2;
-[mindist i2] = min(dist);
+[mindist, i2] = min(dist);
 plot(xc(i2), yc(i2), 'bo');
 i2xind = 0;
 i2yind = 1;
 
-% Now determine the point coordinates
 % first, form two base vectors on the mask
 e1 = [i1xind-i0xind, i1yind-i0yind];
 e2 = [i2xind-i0xind, i2yind-i0yind];
@@ -321,38 +319,84 @@ e2 = [i2xind-i0xind, i2yind-i0yind];
 e1p = [xc(i1)-xc(i0), yc(i1)-yc(i0)];
 e2p = [xc(i2)-xc(i0), yc(i2)-yc(i0)];
 
-e1pnorm = sum(e1p.^2);   % their squared norms
+%% Select two other base vectors [2,0] and [0,2] to make sure there is no inconsistency
+% two base vectors are enough but four vectors will make it more robust
+title('Now please indicate two additional base points on the mask by click mouse on the thresholded image in order [-2 0], [0 -2].');
+
+% select and identify second base point: east 
+but = 0;
+while but ~= 1
+    [x3, y3, but] = ginput(1);
+end
+dist = (xc-x3).^2+(yc-y3).^2;
+[mindist, i3] = min(dist);
+plot(xc(i3), yc(i3), 'co');
+i3xind = -2;  % vector [2, 0]
+i3yind = 0;
+
+% select and identify third base point: north
+but = 0;
+while but ~= 1
+    [x4, y4, but] = ginput(1);
+end
+dist = (xc-x4).^2+(yc-y4).^2;
+[mindist, i4] = min(dist);
+plot(xc(i4), yc(i4), 'co');
+i4xind = 0;
+i4yind = -2;
+
+% first, form two base vectors on the mask
+e3 = [i3xind-i0xind, i3yind-i0yind];  % [-2, 0]
+e4 = [i4xind-i0xind, i4yind-i0yind];  % [0, -2]
+
+% The projection of these two vectors on image plane
+e3p = [xc(i3)-xc(i0), yc(i3)-yc(i0)];
+e4p = [xc(i4)-xc(i0), yc(i4)-yc(i0)];
+
+%% Now determine the point coordinates
+
+e1pnorm = sum(e1p.^2);  % their squared norms
 e2pnorm = sum(e2p.^2);
+e3pnorm = sum(e3p.^2);  % their squared norms
+e4pnorm = sum(e4p.^2);
 
 e1pe2p = sum(e1p.*e2p);  % their dot product
+e3pe4p = sum(e3p.*e4p);  % their dot product
 
-d = (e1pnorm*e2pnorm - e1pe2p*e1pe2p);		% the denominator
+d1 = (e1pnorm*e2pnorm - e1pe2p*e1pe2p);		% the denominator
+d2 = (e3pnorm*e4pnorm - e3pe4p*e3pe4p);		% the denominator
 
 % calculate the coords of all points using the two base vectors
-pind = zeros(Np, 2);
+pind12 = zeros(Np, 2);  % coordinates in the base e1 e2
+pind34 = zeros(Np, 2);  % coordinates in the base e1 e2
 for i = 1:Np
     c = [xc(i)-xc(i0), yc(i)-yc(i0)]; % coord in pixel units
-    A = (sum(c.*e1p)*e2pnorm - sum(c.*e2p)*e1pe2p)/d;
-    B = (sum(c.*e2p)*e1pnorm - sum(c.*e1p)*e1pe2p)/d;
-    pind(i,:) = [A B];
+    A = (sum(c.*e1p)*e2pnorm - sum(c.*e2p)*e1pe2p)/d1;
+    B = (sum(c.*e2p)*e1pnorm - sum(c.*e1p)*e1pe2p)/d1;
+    C = (sum(c.*e3p)*e4pnorm - sum(c.*e4p)*e3pe4p)/d2;
+    D = (sum(c.*e4p)*e3pnorm - sum(c.*e3p)*e3pe4p)/d2;
+    pind12(i,:) = [A B];
+    pind34(i,:) = [C D];
 end
 
 % Now calculate the two components of dots' 3D coordinates on the mask plane
 pmask = zeros(Np,2);
-originalpmask = zeros(Np,2);
+orgpmask12 = zeros(Np,2);  % final coordinates computed with e1 e2
+orgpmask34 = zeros(Np,2);  % final coordinates computed with e3 e4
 
 for i = 1:Np
-    originalpmask(i,1:2) = (e1*pind(i,1))+(e2*pind(i,2)) + [i0xind i0yind];
-    pmask(i,1:2)         = round(originalpmask(i,1:2));
-    NN(i)                = norm(pmask(i,1:2)-originalpmask(i,1:2));
-
-%% for single plane target
-     pmask(i,3)=0;
+    orgpmask12(i,1:2) = (e1*pind12(i,1))+(e2*pind12(i,2)) + [i0xind i0yind];
+    orgpmask34(i,1:2) = (e3*pind34(i,1))+(e4*pind34(i,2)) + [i0xind i0yind];
+    % Compute the mean of two obtained coordinates and then round them
+    pmask(i,1:2)      = round(mean([orgpmask12(i,1:2); orgpmask34(i,1:2)], 1));
+    
+    % for single plane target
+    pmask(i,3)=0;
 end
 
 Np = size(pmask,1);
 
-% check to see if there is any inconsistency
+%% check to see if there is any inconsistency
 ncoll = 0;
 icoll = [];
 
@@ -378,10 +422,12 @@ if ncoll == 0
 else
     str = sprintf('Some particle coordinates are probably wrong. %d conflicts found: \n', ncoll);
     for  ic = 1:ncoll
+        %str = strcat(str, sprintf('(%d, %d)\n', pind12(icoll(ic),:)));
         str = strcat(str, sprintf('(%d, %d)\n', pmask(icoll(ic),:)));
+        plot(xc(icoll(ic)),yc(icoll(ic)),'mo');
     end
     disp(str);
-    title(str);
+    %title(str);
 end
 
 % We avait for Enter to valid the calibration

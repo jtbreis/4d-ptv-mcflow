@@ -1,4 +1,4 @@
-function [calib] = MakeCalibration(dirIn,zPlanes,camName,gridSpace,th,dotSize,lnoise,blackDots,extension,FirstPlane,FirstCam,PlaneNumberList)
+function [calib] = MakeCalibration(dirIn,zPlanes,camName,gridSpace,th,dotSize,lnoise,blackDots,extension,FirstPlane,FirstCam)
 % Make calibration file.
 % With human help, detect calibration grid on calibration pictures and
 % compute 1st and 3rd order transformations.
@@ -17,8 +17,7 @@ function [calib] = MakeCalibration(dirIn,zPlanes,camName,gridSpace,th,dotSize,ln
 %   extension (optional)  : pictures extension. By defaut extention = 'tif', 
 %   FirstPlane (optional) : number of the first plane to treat (useful
 %   when you did a mistake during calibration to start at the right plane),
-%   FirstCam (optional)   : number of the first camera to treat (idem),
-%   PlaneNumberList (optional) : list of the plane number you want to treat
+%   FirstCam (optional)   : number of the first camera to treat (idem).
 % 
 % OUTPUT
 %     a calib.mat file saved in dirIn which contains the structure 'calib' such as for the kz plane and the kcam camera:
@@ -60,9 +59,6 @@ end
 if ~exist('FirstCam','var')
     FirstCam=1;
 end
-if ~exist('PlaneNumberList','var')
-    PlaneNumberList = FirstPlane:numel(zPlanes);
-end
 
 % Total number of cameras
 Ncam = numel(camName);
@@ -76,10 +72,13 @@ xyzRef(3).ref(1:NbzPlanes,:) = repmat([0 0 0],NbzPlanes,1); % pixels
 xyzRef(4).ref(1:NbzPlanes,:) = repmat([0 0 0],NbzPlanes,1); % pixels
 
 %% Let's treat every calibration pictures
-for kz = PlaneNumberList
-    z = zPlanes(kz)
-    for kcam = FirstCam:Ncam
-        filename = sprintf('%s/CalibrationPlan_%d_cam%d.%s',dirIn, kz, kcam, extension);        
+
+for kcam = FirstCam:Ncam
+    for kz = FirstPlane:numel(zPlanes)
+        z = zPlanes(kz)
+        
+        disp(strcat('cam', num2str(kcam)))
+        filename = sprintf('%s/MyCalibration_Cam%d_%03d.%s', dirIn, kcam, kz, extension);        
         %% calib 2D detect white dots over dark background
         if blackDots
             Img=imcomplement(imread(filename));
@@ -96,11 +95,11 @@ for kz = PlaneNumberList
 end
 
 %% make calib structure
-for kz = PlaneNumberList
+for kz = 1:numel(zPlanes)
     for kcam = 1:Ncam
         kz
         kcam
-        load([dirIn filesep 'calib2D_' num2str(kz) '_cam' num2str(kcam) '.mat']);
+        load(strcat(dirIn, '/calib2D_', num2str(kz), '_cam', num2str(kcam), '.mat'));
         calib(kz,kcam).posPlane = zPlanes(kz);
         calib(kz,kcam).pimg = pimg;
         calib(kz,kcam).pos3D = pos3D;
