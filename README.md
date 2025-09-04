@@ -21,3 +21,8 @@ make
 ```
 
 Please refer to the [online documentation](https://4d-ptv.readthedocs.io/en/latest/) for more information.
+
+### Run as devcontainer
+
+'''matlab-proxy-app'''
+You need to keep the terminal open in the background

@@ -25,3 +25,5 @@ profile.png
 **/.venv
 
 .pdm-python
+
+/data
