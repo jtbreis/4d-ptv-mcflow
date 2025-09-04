@@ -229,7 +229,7 @@ class trajectories():
 # Local directory
 path = Path.cwd()
 expe = 'HIT_30V_qa900lpm_qw1.5lpm_23A_set1'  # name of the experiment
-filepath = c.path_processed_data / expe / 'tracks.h5'
+filepath = data/amelie/Processed-DATA / expe / 'tracks.h5'
 
 # one_track = trajectory(filepath, id_track=100)
 # one_track.compute_velocity()
