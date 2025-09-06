@@ -13,14 +13,13 @@ import h5py
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import BSpline, splrep, splev
-sys.path.append('C:/Users/ferran6am/Documents/09_PTV_UW/03_analysis/01_PTV')
-import constants as c
+import constants as cst
 
 # Local directory
 path = Path.cwd()
 
 # Using tex's style
-plt.style.use('tex')
+# plt.style.use('tex')
 
 class trajectory():
     """ Class giving information for one trajectory """
@@ -72,7 +71,7 @@ class trajectory():
 
     def plot_fitted_coordinates(self):
         #todo : ajouter l'intervalle de confiance
-        t = np.arange(len(self.x)) * c.dt  # time vector
+        t = np.arange(len(self.x)) * cst.dt  # time vector
         self.compute_velocity()
 
         fig_x = plt.figure()
@@ -103,13 +102,13 @@ class trajectory():
 
     def finite_difference(self, x, y, z):
         """ Compute Finite Differences """
-        Vx = np.diff(x) / c.dt
-        Vy = np.diff(y) / c.dt
-        Vz = np.diff(z) / c.dt
+        Vx = np.diff(x) / cst.dt
+        Vy = np.diff(y) / cst.dt
+        Vz = np.diff(z) / cst.dt
         return Vx, Vy, Vz
 
     def compute_velocity(self, method='finite difference'):
-        t = np.arange(len(self.x)) * c.dt  # time vector
+        t = np.arange(len(self.x)) * cst.dt  # time vector
         # length_V = len(self.x) - 1
 
         if method == 'finite difference':  # Direct finite difference of the positions
@@ -181,7 +180,7 @@ class trajectories():
         Vel_flat = np.hstack(Vel)
 
         # For now only saving the velocities as 3 big flattened arrays
-        np.savez_compressed(c.path_processed_data / self.case / f'velocities_{method}.npz',
+        np.savez_compressed(path_processed_data / self.case / f'velocities_{method}.npz',
                             Vx=Vx_flat, Vy=Vy_flat, Vz=Vz_flat)
 
         return Vx_flat, Vy_flat, Vz_flat
@@ -228,8 +227,9 @@ class trajectories():
 
 # Local directory
 path = Path.cwd()
+path_processed_data = Path('data/amelie/Processed-DATA')
 expe = 'HIT_30V_qa900lpm_qw1.5lpm_23A_set1'  # name of the experiment
-filepath = Path(data/amelie/Processed-DATA) / expe / 'tracks.h5'
+filepath = str(path_processed_data / expe / 'tracks.h5')
 
 # one_track = trajectory(filepath, id_track=100)
 # one_track.compute_velocity()
