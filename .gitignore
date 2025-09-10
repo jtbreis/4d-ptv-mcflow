@@ -26,5 +26,13 @@ profile.png
 
 .pdm-python
 
+settings.json
+
 /data
 /raw_data
+
+# Distribution / packaging
+*.egg-info/
+*.egg
+dist/
+build/
