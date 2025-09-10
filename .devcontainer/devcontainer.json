@@ -33,6 +33,7 @@
     },
     "mounts": [
         "source=/mnt/ssd/,target=/workspaces/4d-ptv-mcflow/data,type=bind,consistency=cached",
+        "source=/mnt/raid/,target=/workspaces/4d-ptv-mcflow/raw_data,type=bind,consistency=cached",
         "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached"
     ]
 }
