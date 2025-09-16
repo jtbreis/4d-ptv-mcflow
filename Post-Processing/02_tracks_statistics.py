@@ -12,8 +12,8 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import h5py
-sys.path.append('C:/Users/ferran6am/Documents/09_PTV_UW/03_analysis/01_PTV')
 import constants as c
+
 # Using tex's style
 plt.style.use('tex')
 

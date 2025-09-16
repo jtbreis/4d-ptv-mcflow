@@ -15,9 +15,6 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import BSpline, splrep, splev
 import constants as cst
 
-# Local directory
-path = Path.cwd()
-
 # Using tex's style
 # plt.style.use('tex')
 
@@ -56,7 +53,7 @@ class trajectory():
         ax3d = fig.add_subplot(projection='3d')
         ax3d.plot(self.x, self.y, self.z, 'ro')
         if fitted_track:
-            self.compute_velocity(method='polynomial regression')
+            self.compute_velocity(method='polynomial_regression')
             ax3d.plot(self.x_fit, self.y_fit, self.z_fit, label='polynomial fit')
 
         # Decorations figure
@@ -107,14 +104,14 @@ class trajectory():
         Vz = np.diff(z) / cst.dt
         return Vx, Vy, Vz
 
-    def compute_velocity(self, method='finite difference'):
+    def compute_velocity(self, method='finite_difference'):
         t = np.arange(len(self.x)) * cst.dt  # time vector
         # length_V = len(self.x) - 1
 
-        if method == 'finite difference':  # Direct finite difference of the positions
+        if method == 'finite_difference':  # Direct finite difference of the positions
             vx, vy, vz = self.finite_difference(self.x, self.y, self.z)
 
-        elif method == 'polynomial regression': # Compute the velocity after conducting a polynomial regression
+        elif method == 'polynomial_regression': # Compute the velocity after conducting a polynomial regression
 
             """ Polynomial regression, one coordinate at a time """
             px = np.polynomial.polynomial.polyfit(t, self.x, deg=2)
@@ -149,16 +146,20 @@ class trajectory():
 
 class trajectories():
     """ Class processing all the trajectories of a dataset """
-    def __init__(self, expe, filepath):  # path to the file, number of the track
+    def __init__(self, expe):  # path to the file, number of the track
         self.case = expe
-        self.filepath = filepath
-        
+        self.path_processed_data = Path('data/amelie/Processed-DATA') / self.case
+        self.filepath = str(self.path_processed_data / 'tracks.h5')
+
+        self.path_fig = Path('data/amelie/Figures') / self.case
+        self.path_fig.mkdir(parents=True, exist_ok=True)
+
         # Read data and rearrange per pair
-        with h5py.File(filepath, 'r') as file:
+        with h5py.File(self.filepath, 'r') as file:
             data = list(file.keys())
         self.Ntraj = len(data)
     
-    def compute_velocity(self, method='finite difference'):
+    def compute_velocity(self, method='finite_difference'):
         V_ttx, V_tty, V_ttz = [], [], []
         Vel = []  # total velocity
         
@@ -180,7 +181,7 @@ class trajectories():
         Vel_flat = np.hstack(Vel)
 
         # For now only saving the velocities as 3 big flattened arrays
-        np.savez_compressed(path_processed_data / self.case / f'velocities_{method}.npz',
+        np.savez_compressed(self.path_processed_data / f'velocities_{method}.npz',
                             Vx=Vx_flat, Vy=Vy_flat, Vz=Vz_flat)
 
         return Vx_flat, Vy_flat, Vz_flat
@@ -199,35 +200,39 @@ class trajectories():
         sVz = np.std(Vz_flat)
         return sVx, sVy, sVz
 
-    def plot_histogram(self, V_ttx, V_tty, V_ttz, nbins):
-        mVx, mVy, mVz = self.copmute_mean_velocities(V_ttx, V_tty, V_ttz)
-        sVx, sVy, sVz = self.copmute_std_velocities(V_ttx, V_tty, V_ttz)
+    def plot_histogram(self, method, nbins):
+        dat = np.load(self.path_processed_data / f'velocities_{method}.npz')
+        Vx, Vy, Vz = dat['Vx'], dat['Vy'], dat['Vz']
+        # Compute moments
+        mVx, mVy, mVz = self.compute_mean_velocities(Vx, Vy, Vz)
+        sVx, sVy, sVz = self.compute_std_velocities(Vx, Vy, Vz)
 
         bins_yz = np.linspace(-8, 8, nbins)
         
-        plt.figure()
-        plt.hist(V_ttx, bins=np.linspace(mVx - 3 * sVx, mVx + 3 * sVx, nbins), alpha=0.7)
-        plt.legend()
-        plt.xlabel(r'$V_x$')
-        plt.ylabel('Counts')
+        figVx, axVx = plt.subplots()
+        axVx.hist(Vx, bins=np.linspace(mVx - 3 * sVx, mVx + 3 * sVx, nbins), alpha=0.7, color='navy')
+        axVx.set_xlabel(r'$V_x$')
+        
+        figVy, axVy = plt.subplots()
+        axVy.hist(Vy, bins=bins_yz, alpha=0.7, color='navy')
+        axVy.set_xlabel(r'$V_y$')
+        
+        figVz, axVz = plt.subplots()
+        axVz.hist(Vz, bins=bins_yz, alpha=0.7, color='navy')
+        axVz.set_xlabel(r'$V_z$')
 
-        plt.figure()
-        plt.hist(V_tty, bins=bins_yz, alpha=0.7)
-        plt.legend()
-        plt.xlabel(r'$V_y$')
-        plt.ylabel('Counts')
-
-        plt.figure()
-        plt.hist(V_ttz, bins=bins_yz, alpha=0.7)
-        plt.legend()
-        plt.xlabel(r'$V_z$')
-        plt.ylabel('Counts')
-
+        for ax in [axVx, axVy, axVz]:
+            ax.set_ylabel('Counts')
+            # ax.legend()
+        
+        figVx.savefig(self.path_fig / f'Fig_pdf_Vx_{method}.png', format='png', dpi=150)
+        figVy.savefig(self.path_fig / f'Fig_pdf_Vy_{method}.png', format='png', dpi=150)
+        figVz.savefig(self.path_fig / f'Fig_pdf_Vz_{method}.png', format='png', dpi=150)
     # plt.show()
 
 # Local directory
 path = Path.cwd()
-path_processed_data = Path('data/amelie/Processed-DATA')
+path_processed_data = Path('data/amelie/Processed-DATA')  # Path to the processed data
 expe = 'HIT_30V_qa900lpm_qw1.5lpm_23A_set1'  # name of the experiment
 filepath = str(path_processed_data / expe / 'tracks.h5')
 
@@ -235,15 +240,13 @@ filepath = str(path_processed_data / expe / 'tracks.h5')
 # one_track.compute_velocity()
 # one_track.plot_fitted_coordinates()
 # Read all the tracks
-traj = trajectories(expe, filepath)
+traj = trajectories(expe)
 
 # Velocity computation with the direct finite difference
-vx_fdiff, vy_fdiff, vz_fdiff = traj.compute_velocity(method='finite difference')
-mvx, mvy, mvz = traj.compute_mean_velocities(vx_fdiff, vy_fdiff, vz_fdiff)
-traj.plot_histogram(vx_fdiff, vy_fdiff, vz_fdiff, 128)
+# vx_fdiff, vy_fdiff, vz_fdiff = traj.compute_velocity(method='finite_difference')
+traj.plot_histogram(method='finite_difference', nbins=128)
 
-# # Velocity computation after conducting a polynomial regression
-# vx_poly, vy_poly, vz_poly = traj.compute_velocity(method='polynomial regression')
-# mvx, mvy, mvz = traj.compute_mean_velocities(vx_poly, vy_poly, vz_poly)
-# traj.plot_histogram(vx_poly, vy_poly, vz_poly, 128)
+# Velocity computation after conducting a polynomial regression
+vx_poly, vy_poly, vz_poly = traj.compute_velocity(method='polynomial_regression')
+traj.plot_histogram(vx_poly, vy_poly, vz_poly, 128)
 

@@ -12,8 +12,8 @@ import cv2  # opencv function
 import scipy.io as io
 import matplotlib.pyplot as plt
 from matplotlib import image
-sys.path.append('C:/Users/ferran6am/Documents/09_PTV_UW/03_analysis/01_PTV')
 import constants as c
+
 # Using tex's style
 plt.style.use('tex')
 plt.close('all')
