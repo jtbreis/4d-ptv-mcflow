@@ -3,3 +3,5 @@ ipykernel
 trackpy
 pims
 jinja2
+matplotlib
+h5pu
