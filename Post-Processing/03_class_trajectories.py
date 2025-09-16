@@ -228,7 +228,7 @@ class trajectories():
         figVx.savefig(self.path_fig / f'Fig_pdf_Vx_{method}.png', format='png', dpi=150)
         figVy.savefig(self.path_fig / f'Fig_pdf_Vy_{method}.png', format='png', dpi=150)
         figVz.savefig(self.path_fig / f'Fig_pdf_Vz_{method}.png', format='png', dpi=150)
-    # plt.show()
+
 
 # Local directory
 path = Path.cwd()
@@ -247,6 +247,6 @@ traj = trajectories(expe)
 traj.plot_histogram(method='finite_difference', nbins=128)
 
 # Velocity computation after conducting a polynomial regression
-vx_poly, vy_poly, vz_poly = traj.compute_velocity(method='polynomial_regression')
-traj.plot_histogram(vx_poly, vy_poly, vz_poly, 128)
+# vx_poly, vy_poly, vz_poly = traj.compute_velocity(method='polynomial_regression')
+traj.plot_histogram(method='polynomial_regression', nbins=128)
 

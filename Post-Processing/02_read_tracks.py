@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 import numpy as np
 import h5py
-sys.path.append('C:/Users/ferran6am/Documents/09_PTV_UW/03_analysis/01_PTV')
 import constants as c
 
 
@@ -59,10 +58,10 @@ def read_hdf5(filepath):
 # Local directory
 path = Path.cwd()
 expe = 'HIT_30V_qa900lpm_qw1.5lpm_23A_set1'  # name of the experiment
-filepath = c.path_processed_data / expe / 'tracks_rays_out_cpp_th500.h5'
+filepath = Path('data/amelie/Processed-DATA') / expe / 'tracks_rays_out_cpp.h5'
 
 result = read_hdf5(filepath)
 
 # Access data from the result
-#for track in result:
-#    print(track)
+for track in result:
+    print(track)
