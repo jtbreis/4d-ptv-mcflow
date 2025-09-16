@@ -4,4 +4,4 @@ trackpy
 pims
 jinja2
 matplotlib
-h5pu
+h5py
