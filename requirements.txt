@@ -5,3 +5,4 @@ pims
 jinja2
 matplotlib
 h5py
+scipy
