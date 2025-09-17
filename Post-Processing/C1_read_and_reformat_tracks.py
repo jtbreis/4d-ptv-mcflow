@@ -3,6 +3,7 @@
 Created on Fri Nov 24 00:43:22 2023
 
 @author: ferran6am
+I forgot a bit what this code is doing but I think it is rewritting the trajectories data in another format. 
 """
 
 import os
@@ -10,7 +11,7 @@ import sys
 from pathlib import Path
 import numpy as np
 import h5py
-import constants as c
+# import constants as cst
 
 
 def read_hdf5(filepath):
@@ -21,7 +22,7 @@ def read_hdf5(filepath):
         fields = [name for name in data if name not in ['ntraj', 'L', '/', 'trackingparameters']]
         
         L = input_file['/L'][0]  # number of frames for each trajectory
-        ntraj = input_file['/ntraj'][0]  # indices of each trajectory
+        id_traj = input_file['/ntraj'][0]  # indices of each trajectory
         Ntraj = len(L)  # number of trajctories
         
         with h5py.File(output_file_path, 'w') as output_file:
@@ -32,15 +33,17 @@ def read_hdf5(filepath):
                 if kt % 100 == 0:
                     print(f'{str(kt)}/{str(Ntraj)}')
                 nframes = int(L[kt])  # number of frames in the trajectory
-                track_data = {'L': nframes, 'ntraj': int(ntraj[kt])}  # initialise info for that trajectory
+                # initialise info for that trajectory
+                track_data = {'L': nframes, 'id_traj': int(id_traj[kt])} 
                 
                 for field in fields:  # loop over x, y, z 
                     tracks_temp = input_file['/' + field][0]
                     
-                    track_data[field] = tracks_temp[c:c+nframes]
+                    track_data[field] = tracks_temp[c:c + nframes]
                 #tracks.append(track_data)
                 c += nframes
-                group_name = f'traj_{str(int(ntraj[kt]))}'
+                group_name = f'traj_{str(int(id_traj[kt]))}'
+                
                 # Create a new dataset in the output file and save the modified data
                 group = output_file.create_group(group_name)
 

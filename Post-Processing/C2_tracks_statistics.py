@@ -15,7 +15,7 @@ import h5py
 import constants as c
 
 # Using tex's style
-plt.style.use('tex')
+# plt.style.use('tex')
 
 def read_L_hdf5(filepath):
     # Read data and rearrange per pair
@@ -30,7 +30,8 @@ path = Path.cwd()
 
 # Path to the analysed data
 expe = 'HIT_30V_qa900lpm_qw1.5lpm_23A_set1'  # name of the experiment
-filepath = c.path_processed_data / expe / 'tracks_rays_out_cpp2.h5'
+filepath = Path('data/amelie/Processed-DATA') / expe / 'tracks_rays_out_cpp2.h5'
+path_fig = Path('data/amelie/Figures') / expe
 
 L = read_L_hdf5(filepath)
 
@@ -56,6 +57,5 @@ ax.set_ylabel('PDF density')
 ax.set_xlim(3.5, 11.5)
 
 if SAVE == 1:
-    namefig = c.path_ptv_figs / 'Figure_number_points_per_track'
-    fig.savefig(namefig.with_suffix('.pdf'), format='pdf', dpi=150)
+    namefig = path_fig / 'Figure_number_points_per_track'
     fig.savefig(namefig.with_suffix('.png'), format='png', dpi=150)

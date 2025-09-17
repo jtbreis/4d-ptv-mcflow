@@ -4,7 +4,7 @@ Created on Fri Jul 14 19:05:23 2023
 
 @author: ferran6am
 Plot the 3D positions of the calibration points on the target 
-to make sure the calibration is accurate
+to make sure the calibration is accurate.
 """
 
 import os
@@ -149,5 +149,5 @@ for ax,lbl in zip(axes, labels):
 
 if SAVE == 1:
     namefig = c.path_ptv_figs / 'Figure_calibration'
-    fig_thesis.savefig(namefig.with_suffix('.pdf'), format='pdf', dpi=300)
+    # fig_thesis.savefig(namefig.with_suffix('.pdf'), format='pdf', dpi=300)
     fig_thesis.savefig(namefig.with_suffix('.png'), format='png', dpi=150)

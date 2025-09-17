@@ -3,6 +3,9 @@
 Created on Fri Nov 24 04:19:57 2023
 
 @author: ferran6am
+Code to compute the instantaneous particles' velocities after the tracking algorithm, using different schemes 
+(finite difference, polynomial fit, b-spline...).
+Input: tracks.h5 
 """
 
 import os
@@ -20,15 +23,16 @@ path = Path.cwd()
 
 # Using tex's style
 # plt.style.use('tex')
-# plt.style.use('tex')
+
 
 class trajectory():
-    """ Class giving information for one trajectory """
-    def __init__(self, filepath, id_track):  # path to the file, number of the track
-        self.filepath = filepath
+    """ Class computing the velocity for one trajectory """
+    def __init__(self, exp_case, id_track):  # path to the file, number of the track
+        self.case = exp_case
+        self.filepath = str(Path('data/amelie/Processed-DATA') / self.case / 'tracks.h5')
 
         # Path to save the figures
-        self.path_save_fig = path / 'Figures'
+        self.path_save_fig = Path('data/amelie/Figures') / self.case
 
         # Read data and rearrange per pair
         with h5py.File(filepath, 'r') as file:
@@ -107,9 +111,6 @@ class trajectory():
         Vx = np.diff(x) / cst.dt
         Vy = np.diff(y) / cst.dt
         Vz = np.diff(z) / cst.dt
-        Vx = np.diff(x) / cst.dt
-        Vy = np.diff(y) / cst.dt
-        Vz = np.diff(z) / cst.dt
         return Vx, Vy, Vz
 
     def compute_velocity(self, method='finite difference'):
@@ -155,13 +156,13 @@ class trajectory():
 
 class trajectories():
     """ Class processing all the trajectories of a dataset """
-    def __init__(self, expe):  # path to the file, number of the track
-        self.case = expe
+    def __init__(self, exp_case):  # path to the file, number of the track
+        self.case = exp_case
         self.path_processed_data = Path('data/amelie/Processed-DATA') / self.case
         self.filepath = str(self.path_processed_data / 'tracks.h5')
 
-        self.path_fig = Path('data/amelie/Figures') / self.case
-        self.path_fig.mkdir(parents=True, exist_ok=True)
+        self.path_save_fig = Path('data/amelie/Figures') / self.case
+        self.path_save_fig.mkdir(parents=True, exist_ok=True)
 
         # Read data and rearrange per pair
         with h5py.File(self.filepath, 'r') as file:
@@ -234,9 +235,9 @@ class trajectories():
             ax.set_ylabel('Counts')
             # ax.legend()
         
-        figVx.savefig(self.path_fig / f'Fig_pdf_Vx_{method}.png', format='png', dpi=150)
-        figVy.savefig(self.path_fig / f'Fig_pdf_Vy_{method}.png', format='png', dpi=150)
-        figVz.savefig(self.path_fig / f'Fig_pdf_Vz_{method}.png', format='png', dpi=150)
+        figVx.savefig(self.path_save_fig / f'Fig_pdf_Vx_{method}.png', format='png', dpi=150)
+        figVy.savefig(self.path_save_fig / f'Fig_pdf_Vy_{method}.png', format='png', dpi=150)
+        figVz.savefig(self.path_save_fig / f'Fig_pdf_Vz_{method}.png', format='png', dpi=150)
 
 
 # Local directory
