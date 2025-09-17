@@ -145,6 +145,7 @@ class trajectory():
 
         return vx, vy, vz
 
+    #todo :  compute acceleration
     # def compute_acceleration(self):
     #     length_A = len(self.x) - 2
     #
