@@ -14,22 +14,22 @@ from pathlib import Path
 import numpy as np
 import struct
 import matplotlib.pyplot as plt
-sys.path.append('C:/Users/ferran6am/Documents/Python Scripts')
-sys.path.append('C:/Users/ferran6am/Documents/09_PTV_UW/03_analysis/01_PTV')
-import constants as c
-import Plot_settings as ps
+
+import constants as cst
+import plot_settings as ps
+
 # Using tex's style
-plt.style.use('tex')
+# plt.style.use('tex')
 
 # Local directory
 path = Path.cwd()
 expe = 'MyTestCalibration1_y52cm'  # name of the experiment
 
 # Path to save figures
-path_fig = c.path_processed_data / expe / 'Figures'
+path_fig = Path(data/amelie/Figures) / expe
 path_fig.mkdir(parents=True, exist_ok=True)
 
-filename = c.path_processed_data / expe / 'matchedcam3_1-12.dat'
+filename =  Path(data/amelie/Processed-DATA) / expe / 'matchedcam3_1-12.dat'
 minframes = 1
 maxframes = 12
 zpos = np.linspace(-5, 5, 11)
@@ -126,7 +126,6 @@ fig_calib.savefig(path_fig / 'Calibration_plate.png', format='png', dpi=300)
 
 
 
-
 ax1_thesis.set_xlabel(r'$x ~ [mm]$')
 ax1_thesis.set_ylabel(r'$z ~ [mm]$')
 ax1_thesis.set_zlabel(r'$y ~ [mm]$')
@@ -148,6 +147,6 @@ for ax,lbl in zip(axes, labels):
                   fontweight="bold")
 
 if SAVE == 1:
-    namefig = c.path_ptv_figs / 'Figure_calibration'
+    namefig = path_fig / 'Figure_calibration'
     # fig_thesis.savefig(namefig.with_suffix('.pdf'), format='pdf', dpi=300)
     fig_thesis.savefig(namefig.with_suffix('.png'), format='png', dpi=150)

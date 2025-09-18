@@ -3,7 +3,8 @@
 Created on Fri Nov 24 00:43:22 2023
 
 @author: ferran6am
-I forgot a bit what this code is doing but I think it is rewritting the trajectories data in another format. 
+This code is rewritting the trajectories data in another format. 
+Might not be useful depending on the output of the new tracking code.
 """
 
 import os
