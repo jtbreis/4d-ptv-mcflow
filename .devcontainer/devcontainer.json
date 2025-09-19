@@ -24,8 +24,11 @@
             "ms-python.python",
             "ms-python.vscode-pylance",
             "ms-toolsai.jupyter",
-            "analytic-signal.preview-tiff"
+            "analytic-signal.preview-tiff",
+            "mhutchie.git-graph"
         ],
+        "python.formatting.provider": "autopep8",
+        "editor.formatOnSave": true,
         "settings": {
             "terminal.integrated.shell.linux": "/bin/bash"
         }
