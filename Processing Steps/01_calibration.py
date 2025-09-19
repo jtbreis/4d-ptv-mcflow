@@ -32,5 +32,3 @@ calibration.perform_calibration()
 
 # %%
 calibration.write_calibration()
-
-# %%
