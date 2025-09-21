@@ -10,5 +10,5 @@ def read_h5_centers(filename):
 
             x = grp['x'][()]
             y = grp['y'][()]
-            frames[frame_idx] = np.array([x, y])
+            frames[frame_idx] = np.array([x, y]).transpose()
         return frames
