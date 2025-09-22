@@ -15,6 +15,8 @@
 #include "STM_helpers.h"
 #include "CLI11.hpp"
 
+#include "import_rays_h5.h"
+
 void do_STM(const std::string input_dir, const std::string filename, const unsigned int maxframes, const unsigned int mincameras, const double maxdistance, const double multiplematchesperraymindistance, const unsigned int maxmatchesperray, const struct boundingboxspec &bb, bool save_hdf5, bool save_bin, std::string output_dir) {
     std::string inputfile = input_dir + '/' + filename;
     // Print parameters
@@ -84,100 +86,65 @@ void do_STM(const std::string input_dir, const std::string filename, const unsig
         stm_file.open(outputh5file, maxframes, mincameras, maxdistance, maxmatchesperray, bb.nx, bb.ny, bb.nz);
         std::cout << "HDF5 outout file: " << outputh5file << std::endl;
     }
-    
-    // Open input binary file
-    std::ifstream rayfile;
-    rayfile.open (inputfile, std::ios::in | std::ios::binary);
-    
-    
+
+    H5::H5File rayfile(inputfile, H5F_ACC_RDONLY);
+
     unsigned int currentframe = 0;
-    if (rayfile.is_open()) {
-        uint32_t numrays = 0;
-        rayfile.read((char*)&numrays,sizeof(numrays));
-        currentframe++;
-        
-        while(!rayfile.eof() && currentframe <= maxframes)
-        {
-            std::cout << "#######\n";
-            std::cout << "Frame: " << currentframe << "\nNumber of rays: " << numrays << "\n";
-            std::cout << timeasstring() << "\n";
-            // Read array of rays
-            std::vector<ray> rays;
-            for(unsigned int i = 0; i < numrays; i++) {
-                ray tmpray;
-                uint8_t tmpcamid;
-                uint16_t tmprayid;
-                float tmpx,tmpy,tmpz,tmpvx,tmpvy,tmpvz;  // Floats (4 byte)
-                
-                rayfile.read((char*)&tmpcamid,sizeof(tmpcamid));
-                rayfile.read((char*)&tmprayid,sizeof(tmprayid));
-                rayfile.read((char*)&tmpx,sizeof(tmpx));
-                rayfile.read((char*)&tmpy,sizeof(tmpy));
-                rayfile.read((char*)&tmpz,sizeof(tmpz));
-                rayfile.read((char*)&tmpvx,sizeof(tmpvx));
-                rayfile.read((char*)&tmpvy,sizeof(tmpvy));
-                rayfile.read((char*)&tmpvz,sizeof(tmpvz));
-                tmpray.camid = tmpcamid;
-                tmpray.rayid = tmprayid;
-                tmpray.x = tmpx;
-                tmpray.y = tmpy;
-                tmpray.z = tmpz;
-                tmpray.vx = tmpvx;
-                tmpray.vy = tmpvy;
-                tmpray.vz = tmpvz;
-                
-                rays.push_back(tmpray);
-            }
-            
-            std::vector<candidatematch> results;
+    uint32_t numrays = 0;
     
-             // Do the actual stuff, currently no return argument; implement!
-            results = SpaceTraversalMatching(rays, bb, bounds, maxmatchesperray, mincameras, maxdistance, multiplematchesperraymindistance);
-            
-            if (save_bin) {
-                // Write results to binary file
-                uint32_t numberofmatches = (int)results.size();
-                streamout.write((char*)&numberofmatches, sizeof(uint32_t));
-                std::cout << "Number of matches: " << numberofmatches << "\n";
-                for(auto match: results)
+    while(currentframe <= maxframes)
+    {
+        std::cout << "#######\n";
+        std::cout << "Frame: " << currentframe << "\nNumber of rays: " << numrays << "\n";
+        std::cout << timeasstring() << "\n";
+        // Read array of rays
+        std::vector<ray> rays;
+        rays = import_rays_h5(rayfile, currentframe);
+        
+        std::vector<candidatematch> results;
+
+            // Do the actual stuff, currently no return argument; implement!
+        results = SpaceTraversalMatching(rays, bb, bounds, maxmatchesperray, mincameras, maxdistance, multiplematchesperraymindistance);
+        
+        if (save_bin) {
+            // Write results to binary file
+            uint32_t numberofmatches = (int)results.size();
+            streamout.write((char*)&numberofmatches, sizeof(uint32_t));
+            std::cout << "Number of matches: " << numberofmatches << "\n";
+            for(auto match: results)
+            {
+                uint8_t numberofcams = (int)match.camrayids.size();
+                streamout.write((char*)&numberofcams, sizeof(uint8_t));
+                
+                float val = match.matchx;
+                streamout.write((char*)&val, sizeof(float));
+                val = match.matchy;
+                streamout.write((char*)&val, sizeof(float));
+                val = match.matchz;
+                streamout.write((char*)&val, sizeof(float));
+                val = match.matcherror;
+                streamout.write((char*)&val, sizeof(float));
+                for(auto camrayid:match.camrayids)
                 {
-                    uint8_t numberofcams = (int)match.camrayids.size();
-                    streamout.write((char*)&numberofcams, sizeof(uint8_t));
-                    
-                    float val = match.matchx;
-                    streamout.write((char*)&val, sizeof(float));
-                    val = match.matchy;
-                    streamout.write((char*)&val, sizeof(float));
-                    val = match.matchz;
-                    streamout.write((char*)&val, sizeof(float));
-                    val = match.matcherror;
-                    streamout.write((char*)&val, sizeof(float));
-                    for(auto camrayid:match.camrayids)
-                    {
-                        uint8_t camid = (int)camrayid.camid;
-                        uint16_t rayid =(int)camrayid.rayid;
-                        streamout.write((char*)&camid, sizeof(uint8_t));
-                        streamout.write((char*)&rayid, sizeof(uint16_t));
-                    }
+                    uint8_t camid = (int)camrayid.camid;
+                    uint16_t rayid =(int)camrayid.rayid;
+                    streamout.write((char*)&camid, sizeof(uint8_t));
+                    streamout.write((char*)&rayid, sizeof(uint16_t));
                 }
             }
+        }
 
-            if (save_hdf5) {
-                // Write results to HDF5 file
-                stm_file.write_matches(currentframe, results);
-            }
-            
-            rayfile.read((char*)&numrays,sizeof(numrays));  // Read number of rays for next frame
-            currentframe++;
+        if (save_hdf5) {
+            // Write results to HDF5 file
+            stm_file.write_matches(currentframe, results);
         }
-        unsigned int lastframe = currentframe - 1;
-        if (lastframe != maxframes) {
-            std::cout << "Last frame was " << lastframe << " and not " << maxframes << std::endl;
-            stm_file.set_last_frame(lastframe);
-        }
+        
+        currentframe++;
     }
-    else {
-        std::cout << "Something went wrong during opening the file. Doez teh file exist?\n";
+    unsigned int lastframe = currentframe - 1;
+    if (lastframe != maxframes) {
+        std::cout << "Last frame was " << lastframe << " and not " << maxframes << std::endl;
+        stm_file.set_last_frame(lastframe);
     }
     rayfile.close();
     streamout.close();

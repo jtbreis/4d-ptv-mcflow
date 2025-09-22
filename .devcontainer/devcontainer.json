@@ -17,7 +17,7 @@
         "MWI_APP_PORT": "8888"
     },
     "forwardPorts": [8888],
-    "postCreateCommand": "pip install -r requirements.txt",
+    "postCreateCommand": "sudo apt-get update && sudo apt-get install -y build-essential g++ libhdf5-dev && pip install -r requirements.txt",
     "customizations": {
         "vscode": {
         "extensions": [
