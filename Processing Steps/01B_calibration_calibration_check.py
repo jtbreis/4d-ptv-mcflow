@@ -1,11 +1,14 @@
 # %%
 import os
+import subprocess
+from python_4dptv.matching.rays import Rays
 from python_4dptv.matching.stereomatching import StereoMatching
 # %load_ext autoreload
 # %autoreload 2
 
 os.chdir('/workspaces/4d-ptv-mcflow')
-folder = '/workspaces/4d-ptv-mcflow/data/julian/PTV_center/TTI_aligned_with_gravity/Run1'
+# Set Folder
+folder = 'data/julian/PTV_center/Calibration/Tests'
 # Set StereoMatching Parameters
 mincameras = 3
 maxdistance = 1
@@ -15,6 +18,10 @@ maxmatchesperray = 2
 nvoxels = [400, 400, 250]
 # Bounding Box [minX, maxX, minY, maxY, minZ, maxZ]
 boundingbox = [-50, 50, -35, 35, -20, 20]
+# %% Run Ray Computation
+rays = Rays(folder)
+rays.compute_rays()
+rays.write_rays()
 
 # %% Run Stereomatching you need to run 'cd STMCpp && make' first / only once
 stereomatching = StereoMatching(folder, mincameras, maxdistance,

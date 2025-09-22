@@ -27,6 +27,7 @@ calibration.preprocess_images(enhance_contrast='None')
 calibration.match_calibration_grid(center_find_method='TSI-backlight')
 # %%
 calibration.write_matches()
+calibration.write_calibration_test_files()
 # %%
 calibration.perform_calibration()
 
