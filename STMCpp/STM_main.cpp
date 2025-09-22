@@ -92,7 +92,7 @@ void do_STM(const std::string input_dir, const std::string filename, const unsig
     unsigned int currentframe = 0;
     uint32_t numrays = 0;
     
-    while(currentframe <= maxframes)
+    while(currentframe <= (maxframes-1))
     {
         std::cout << "#######\n";
         std::cout << "Frame: " << currentframe << "\nNumber of rays: " << numrays << "\n";
@@ -141,7 +141,7 @@ void do_STM(const std::string input_dir, const std::string filename, const unsig
         
         currentframe++;
     }
-    unsigned int lastframe = currentframe - 1;
+    unsigned int lastframe = currentframe;
     if (lastframe != maxframes) {
         std::cout << "Last frame was " << lastframe << " and not " << maxframes << std::endl;
         stm_file.set_last_frame(lastframe);

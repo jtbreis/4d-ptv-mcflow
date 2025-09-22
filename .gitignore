@@ -1,7 +1,7 @@
 # Compiled binaries
 *.o
-Matching/STMCpp/STM
-Matching/STMCpp/STM_info
+STMCpp/STM
+STMCpp/STM_info
 
 # Compiled documentation
 Documentation/build
@@ -14,9 +14,7 @@ Documentation/build
 
 Documentation/TestData/Processed_DATA/MyExperiment/*
 
-Matching/STMCpp/*.h5
-Matching/STMPython/*.h5
-Matching/STMPython/*.dat
+STMCpp/*.h5
 
 *.pstats
 profile.png
