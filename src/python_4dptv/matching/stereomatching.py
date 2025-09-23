@@ -3,6 +3,8 @@ import h5py
 
 from ..utils.structure import Filenames
 
+from ..plotting.plot_particles import plot_particles_xyze
+
 
 class StereoMatching():
     def __init__(self, path, mincameras, maxdistance, multiplematchesperraydistance, maxmatchesperray, nvoxels: list[int], boundingbox: list[float]):
@@ -49,22 +51,8 @@ class StereoMatching():
         # Wait for the process to finish
         proc.wait()
 
-        self.write_metadata()
-
-    def write_metadata(self):
-        with h5py.File(self.path + Filenames.STM.value, "a") as f:
-            metadata = {
-                "mincameras": self.mincameras,
-                "maxdistance": self.maxdistance,
-                "multiplematchesperraydistance": self.multiplematchesperraydistance,
-                "maxmatchesperray": self.maxmatchesperray,
-                "nvoxels": [self.nx, self.ny, self.nz],
-                "boundingbox": [
-                    [self.minX, self.maxX],
-                    [self.minY, self.maxY],
-                    [self.minZ, self.maxZ]
-                ],
-                "frames": self.frames
-            }
-            for key, value in metadata.items():
-                f.attrs[key] = value
+    def plot_matches(self):
+        with h5py.File(self.path + Filenames.STM.value, "r") as f:
+            for frame_idx, frame in enumerate(f.values()):
+                XYZe = frame['xyze']
+                plot_particles_xyze(XYZe)

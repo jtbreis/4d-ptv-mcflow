@@ -184,16 +184,13 @@ void STM_File::write_matches(const unsigned int frameno, std::vector<candidatema
     }
 
     // Create the datasets
-    std::string xyze_name = "/frame";
-    xyze_name.append(std::to_string(frameno));
-    xyze_name.append("_xyze");
-    H5::DataSet xyze_dset = f->createDataSet(H5std_string(xyze_name),
+    std::string xyze_name = "xyze";
+    H5::Group frameno_group = f->createGroup(H5std_string("/frame" + std::to_string(frameno).insert(0, 5 - std::to_string(frameno).length(), '0')));
+    H5::DataSet xyze_dset = frameno_group.createDataSet(H5std_string(xyze_name),
                                             H5::PredType::NATIVE_DOUBLE,
                                             xyze_space, xyze_plist);
-    std::string camrayids_name = "/frame";
-    camrayids_name.append(std::to_string(frameno));
-    camrayids_name.append("_camrayids");
-    H5::DataSet camrayids_dset = f->createDataSet(H5std_string(camrayids_name),
+    std::string camrayids_name = "camrayids";
+    H5::DataSet camrayids_dset = frameno_group.createDataSet(H5std_string(camrayids_name),
                                                   H5::PredType::NATIVE_LONG,
                                                   camrayids_space, camrayids_plist);
 

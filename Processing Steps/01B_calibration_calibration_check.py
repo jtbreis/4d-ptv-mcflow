@@ -3,15 +3,13 @@ import os
 import subprocess
 from python_4dptv.matching.rays import Rays
 from python_4dptv.matching.stereomatching import StereoMatching
-# %load_ext autoreload
-# %autoreload 2
 
 os.chdir('/workspaces/4d-ptv-mcflow')
 # Set Folder
 folder = 'data/julian/PTV_center/Calibration/Tests'
 # Set StereoMatching Parameters
 mincameras = 3
-maxdistance = 1
+maxdistance = 0.05
 multiplematchesperraydistance = 1
 maxmatchesperray = 2
 # Number of Voxels in direction [nx, ny, nz]
@@ -27,3 +25,8 @@ rays.write_rays()
 stereomatching = StereoMatching(folder, mincameras, maxdistance,
                                 multiplematchesperraydistance, maxmatchesperray, nvoxels, boundingbox)
 stereomatching.run_stereomatching()
+
+# %%
+stereomatching.plot_matches()
+
+# %%
