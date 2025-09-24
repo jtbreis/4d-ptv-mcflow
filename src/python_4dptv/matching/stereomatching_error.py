@@ -34,7 +34,7 @@ def evaluate_stereomatching_error(path):
     distances, indices = tree.query(XYZstm[:, :-1])
     closest_matches = XYZknown[indices]
 
-    error_histogram(distances)
+    error_histogram(distances, path)
 
     unique_z = np.unique(XYZknown[:, 2])
 
@@ -53,22 +53,24 @@ def evaluate_stereomatching_error(path):
         fig.suptitle(f'Error Plots for Z = {z_val}')
         for ax, err, label in zip(axes.flat, [e[mask] for e in errors], labels):
             sc = ax.scatter(XYZstm[mask, 0], XYZstm[mask, 1], XYZstm[mask, 2],
-                            c=err, cmap='viridis', s=10)
+                            c=err, cmap='viridis', s=30)
             ax.set_xlabel('X')
             ax.set_ylabel('Y')
             ax.set_zlabel('Z')
             ax.set_zlim(z_val - 1.0, z_val + 1.0)
             ax.set_title(label)
             plt.colorbar(sc, ax=ax)
+        plt.savefig(os.path.join(path, f"error_plots/z_plane_{z_val}.pdf"))
         plt.tight_layout()
         plt.show()
 
 
-def error_histogram(distances):
+def error_histogram(distances, folder):
     plt.figure(figsize=(8, 5))
     plt.hist(distances, bins=50, color='skyblue', edgecolor='black')
     plt.xlabel('Distance to Closest Match')
     plt.ylabel('Frequency')
     plt.title('Histogram of Stereomatching Error Distances')
     plt.tight_layout()
+    plt.savefig(os.path.join(folder, "error_plots/distance_histogram.pdf"))
     plt.show()

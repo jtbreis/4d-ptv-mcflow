@@ -2,9 +2,10 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+import os
 
 
-def plot_particles_xyze(xyze, boundingbox):
+def plot_particles_xyze(xyze, boundingbox, path, frame):
     """
     Plots 3D particle positions with color-coded uncertainty.
 
@@ -16,13 +17,15 @@ def plot_particles_xyze(xyze, boundingbox):
     ax = fig.add_subplot(111, projection='3d')
     sc = ax.scatter(x, y, z, c=e, cmap='viridis', marker='o')
     cb = plt.colorbar(sc, ax=ax, pad=0.1)
-    cb.set_label('Uncertainty')
+    cb.set_label('Error')
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     ax.set_xlim(boundingbox[0], boundingbox[1])
     ax.set_ylim(boundingbox[2], boundingbox[3])
     ax.set_zlim(boundingbox[4], boundingbox[5])
-    plt.title('3D Particle Positions with Uncertainty')
+    plt.title('3D Particle Positions with Error')
     plt.tight_layout()
+    plt.savefig(os.path.join(
+        path, f"matching_plots/matches_frame_{frame}.pdf"))
     plt.show()
