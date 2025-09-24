@@ -32,7 +32,9 @@ class StereoMatching():
             groups = list(f.keys())
             return len(f[groups[0]].keys())
 
-    def run_stereomatching(self):
+    def run_stereomatching(self, nframes=None):
+        if nframes is not None:
+            self.frames = nframes
         run_command = f'./STMCpp/STM -i {self.filename} -o {self.output} -f {self.frames} -c {self.mincameras} -d {self.maxdistance} -s {self.multiplematchesperraydistance} -m {self.maxmatchesperray} -x {self.nx} -y {self.ny} -z {self.nz} -b {self.minX} {self.maxX} {self.minY} {self.maxY} {self.minZ} {self.maxZ} --hdf5'
 
         # Launch the process

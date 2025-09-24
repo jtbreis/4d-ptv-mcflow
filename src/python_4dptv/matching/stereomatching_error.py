@@ -7,7 +7,7 @@ import os
 from scipy.spatial import cKDTree
 
 
-def evaluate_stereomatching_error(path):
+def evaluate_stereomatching_error(path, boundingbox):
     with h5py.File(path + Filenames.STM.value, "r") as f:
         XYZe = np.empty(len(f.keys()), dtype=object)
         for frame_idx, frame in enumerate(f.values()):
@@ -44,6 +44,8 @@ def evaluate_stereomatching_error(path):
               XYZstm[:, 2] - closest_matches[:, 2],
               distances]
 
+    max_errors = [np.max(np.abs(err)) for err in errors]
+
     for z_val in unique_z:
         mask = np.abs(XYZstm[:, 2] - z_val) <= 1.0
         if np.sum(mask) == 0:
@@ -57,9 +59,13 @@ def evaluate_stereomatching_error(path):
             ax.set_xlabel('X')
             ax.set_ylabel('Y')
             ax.set_zlabel('Z')
-            ax.set_zlim(z_val - 1.0, z_val + 1.0)
+            ax.set_xlim(boundingbox[0], boundingbox[1])
+            ax.set_ylim(boundingbox[2], boundingbox[3])
+            ax.set_zlim(boundingbox[4], boundingbox[5])
             ax.set_title(label)
             plt.colorbar(sc, ax=ax)
+            sc.set_clim(-max_errors[labels.index(label)],
+                        max_errors[labels.index(label)])
         plt.savefig(os.path.join(path, f"error_plots/z_plane_{z_val}.pdf"))
         plt.tight_layout()
         plt.show()

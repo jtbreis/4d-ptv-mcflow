@@ -14,7 +14,7 @@ maxdistance = 0.2
 multiplematchesperraydistance = 1
 maxmatchesperray = 1
 # Number of Voxels in direction [nx, ny, nz]
-nvoxels = [600, 600, 400]
+nvoxels = [600, 600, 500]
 # Bounding Box [minX, maxX, minY, maxY, minZ, maxZ]
 boundingbox = [-50, 50, -35, 35, -20, 20]
 # %% Run Ray Computation
@@ -30,6 +30,6 @@ stereomatching.run_stereomatching()
 # %%
 stereomatching.plot_matches()
 # %%
-evaluate_stereomatching_error(folder)
+evaluate_stereomatching_error(folder, boundingbox)
 
 # %%
