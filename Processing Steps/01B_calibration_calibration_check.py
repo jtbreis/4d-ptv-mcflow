@@ -3,6 +3,7 @@ import os
 import subprocess
 from python_4dptv.matching.rays import Rays
 from python_4dptv.matching.stereomatching import StereoMatching
+from python_4dptv.matching.stereomatching_error import evaluate_stereomatching_error
 
 os.chdir('/workspaces/4d-ptv-mcflow')
 # Set Folder
@@ -28,5 +29,7 @@ stereomatching.run_stereomatching()
 
 # %%
 stereomatching.plot_matches()
+# %%
+evaluate_stereomatching_error(folder)
 
 # %%
