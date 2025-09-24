@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
 
-def plot_particles_xyze(xyze):
+def plot_particles_xyze(xyze, boundingbox):
     """
     Plots 3D particle positions with color-coded uncertainty.
 
@@ -20,6 +20,9 @@ def plot_particles_xyze(xyze):
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
+    ax.set_xlim(boundingbox[0], boundingbox[1])
+    ax.set_ylim(boundingbox[2], boundingbox[3])
+    ax.set_zlim(boundingbox[4], boundingbox[5])
     plt.title('3D Particle Positions with Uncertainty')
     plt.tight_layout()
     plt.show()

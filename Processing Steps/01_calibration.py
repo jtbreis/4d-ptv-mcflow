@@ -15,7 +15,7 @@ z_min = -20  # in mm
 z_max = 20  # in mm
 
 target_point_diameter = 15
-number_of_planes = 2
+number_of_planes = 5
 
 # %%
 calibration = Calibration(cameras=cameras, folder_path=folder_path, output_path=output_path, calibration_grid_path=calibration_grid_path,

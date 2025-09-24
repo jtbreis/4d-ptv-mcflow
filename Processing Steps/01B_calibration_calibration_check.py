@@ -9,11 +9,11 @@ os.chdir('/workspaces/4d-ptv-mcflow')
 folder = 'data/julian/PTV_center/Calibration/Tests'
 # Set StereoMatching Parameters
 mincameras = 3
-maxdistance = 0.05
+maxdistance = 0.2
 multiplematchesperraydistance = 1
-maxmatchesperray = 2
+maxmatchesperray = 1
 # Number of Voxels in direction [nx, ny, nz]
-nvoxels = [400, 400, 250]
+nvoxels = [600, 600, 400]
 # Bounding Box [minX, maxX, minY, maxY, minZ, maxZ]
 boundingbox = [-50, 50, -35, 35, -20, 20]
 # %% Run Ray Computation

@@ -25,6 +25,7 @@ class StereoMatching():
         self.maxY = boundingbox[3]
         self.minZ = boundingbox[4]
         self.maxZ = boundingbox[5]
+        self.boundingbox = boundingbox
 
     def read_number_of_frames(self, filename):
         with h5py.File(filename, 'r') as f:
@@ -55,4 +56,4 @@ class StereoMatching():
         with h5py.File(self.path + Filenames.STM.value, "r") as f:
             for frame_idx, frame in enumerate(f.values()):
                 XYZe = frame['xyze']
-                plot_particles_xyze(XYZe)
+                plot_particles_xyze(XYZe, self.boundingbox)
