@@ -1,3 +1,6 @@
 [submodule "PTVcalib"]
 	path = PTVcalib
 	url = git@github.com:jtbreis/PTVcalib.git
+[submodule "4BE-ETI"]
+	path = 4BE-ETI
+	url = git@github.com:jtbreis/4BE-ETI.git

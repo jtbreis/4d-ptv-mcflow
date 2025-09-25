@@ -38,6 +38,7 @@ class Rays():
         self.dd[cam_idx] = np.empty(
             self.centers[cam_idx].shape[0], dtype=object)
         for frame_idx, frame_xy in enumerate(self.centers[cam_idx]):
+            print(f'Frame {frame_idx} out of {len(self.centers[cam_idx])}')
             self.XYZ[cam_idx][frame_idx] = self.calibration[cam_idx].transform_to_real_world(
                 frame_xy)
             self.xyz0[cam_idx][frame_idx], self.dd[cam_idx][frame_idx] = fit3dline(
@@ -46,6 +47,7 @@ class Rays():
 
     def compute_rays(self):
         for cam_idx in range(self.ncameras):
+            print(f'Processing Camera {cam_idx}')
             self.process_camera(cam_idx=cam_idx)
 
     def find_rays(calibration, x_px, y_px):

@@ -3,3 +3,4 @@ ipykernel
 trackpy
 pims
 jinja2
+tables
