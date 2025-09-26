@@ -4,3 +4,6 @@
 [submodule "4BE-ETI"]
 	path = 4BE-ETI
 	url = git@github.com:jtbreis/4BE-ETI.git
+[submodule "mcflow_plotting"]
+	path = mcflow_plotting
+	url = git@github.com:jtbreis/mcflow-plotting.git

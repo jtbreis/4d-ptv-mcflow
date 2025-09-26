@@ -5,9 +5,10 @@ from mcflow_plotting.turbulence.velocity import plot_rms_velocity
 from mcflow_plotting.turbulence.velocity import plot_mean_vel_time
 import numpy as np
 
-
-filename = '/workspaces/4d-ptv-mcflow/data/julian/PTV_center/TTI_no_gravity/Run2/tracks.h5'
-output_path = '/workspaces/4d-ptv-mcflow/data/julian/PTV_center/TTI_no_gravity'
+case = 'TTI_aligned_with_gravity'
+run = 'Run1'
+filename = f'/workspaces/4d-ptv-mcflow/data/julian/PTV_center/{case}/{run}/tracks.h5'
+output_path = f'/workspaces/4d-ptv-mcflow/data/julian/PTV_center/{case}'
 
 samples = load_tracks(filename, 1e-3, 10)
 
