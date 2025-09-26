@@ -19,5 +19,5 @@ boundingbox = [-50, 50, -35, 35, -20, 20]
 # %% Run Stereomatching you need to run 'cd STMCpp && make' first / only once
 stereomatching = StereoMatching(folder, mincameras, maxdistance,
                                 multiplematchesperraydistance, maxmatchesperray, nvoxels, boundingbox)
-stereomatching.run_stereomatching(10)
+stereomatching.run_stereomatching(40)
 stereomatching.plot_matches()

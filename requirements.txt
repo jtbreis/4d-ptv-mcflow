@@ -1,6 +1,5 @@
 numpy
-ipykernel
-trackpy
-pims
-jinja2
-tables
+scipy
+matplotlib
+h5py
+pandas

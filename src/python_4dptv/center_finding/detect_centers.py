@@ -3,16 +3,18 @@ import trackpy as tp
 import pims
 import random
 import matplotlib.pyplot as plt
+import os
 
 from ..io.write_h5 import write_h5
-import os
+from ..utils.structure import Folders
 
 
 class CenterFinding():
     def __init__(self, path: str, output_path: str, particle_diameter: int, threshold: int = 10, minmass: int = 0):
         self.frames = pims.open(path)
+        os.makedirs(output_path + Folders.CENTERS.value, exist_ok=True)
         self.output_path = os.path.splitext(
-            output_path + os.path.basename(path))[0] + '.h5'
+            output_path + Folders.CENTERS.value + '/' + os.path.basename(path))[0] + '.h5'
         self.particle_diameter = particle_diameter
         self.threshold = threshold
         self.minmass = minmass
