@@ -50,4 +50,3 @@ print("Starting Stereomatching")
 stereomatching = StereoMatching(process_data_path, mincameras, maxdistance,
                                 multiplematchesperraydistance, maxmatchesperray, nvoxels, boundingbox)
 stereomatching.run_stereomatching()
-del stereomatching

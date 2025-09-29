@@ -14,7 +14,7 @@ HDF5 = $(patsubst %.dat, %_out_cpp.h5, $(RAYS))
 BIN = $(patsubst %.dat, %_out_cpp.bin, $(RAYS))
 LOG = $(patsubst %.dat, %.log, $(RAYS))
 
-CXXFLAGS = -std=gnu++11 -O3
+CXXFLAGS = -std=gnu++11 -O3 -fopenmp
 
 all: STM STM_info
 

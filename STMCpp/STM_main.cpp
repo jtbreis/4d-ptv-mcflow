@@ -7,6 +7,7 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <omp.h>
 
 #include <sys/stat.h>
 
@@ -83,72 +84,64 @@ void do_STM(const std::string input_dir, const std::string filename, const unsig
     STM_File stm_file;
     if (save_hdf5) {
         std::string outputh5file = output_dir + "/" + filebasename + "_out_cpp.h5";
-        stm_file.open(outputh5file, maxframes, mincameras, maxdistance, maxmatchesperray, bb.nx, bb.ny, bb.nz);
-        std::cout << "HDF5 outout file: " << outputh5file << std::endl;
+        stm_file.open(outputh5file, maxframes-1, mincameras, maxdistance, maxmatchesperray, bb.nx, bb.ny, bb.nz);
+        std::cout << "HDF5 output file: " << outputh5file << std::endl;
     }
 
-    H5::H5File rayfile(inputfile, H5F_ACC_RDONLY);
+    
 
     unsigned int currentframe = 0;
     uint32_t numrays = 0;
-    
-    while(currentframe <= (maxframes-1))
-    {
-        std::cout << "#######\n";
-        std::cout << "Frame: " << currentframe << "\nNumber of rays: " << numrays << "\n";
-        std::cout << timeasstring() << "\n";
-        // Read array of rays
-        std::vector<ray> rays;
-        rays = import_rays_h5(rayfile, currentframe);
-        
-        std::vector<candidatematch> results;
+   
+    #pragma omp parallel for schedule(dynamic)
+    for (int currentframe = 0; currentframe < (int)maxframes; currentframe++) {
 
-            // Do the actual stuff, currently no return argument; implement!
-        results = SpaceTraversalMatching(rays, bb, bounds, maxmatchesperray, mincameras, maxdistance, multiplematchesperraymindistance);
-        
+
+        H5::H5File rayfile(inputfile, H5F_ACC_RDONLY);
+
+        auto rays = import_rays_h5(rayfile, currentframe);
+        auto results = SpaceTraversalMatching(rays, bb, bounds,
+                                              maxmatchesperray,
+                                              mincameras,
+                                              maxdistance,
+                                              multiplematchesperraymindistance);
+
+        // Writing must be serialized
+        #pragma omp critical(binout)
         if (save_bin) {
-            // Write results to binary file
-            uint32_t numberofmatches = (int)results.size();
+            uint32_t numberofmatches = (uint32_t)results.size();
             streamout.write((char*)&numberofmatches, sizeof(uint32_t));
-            std::cout << "Number of matches: " << numberofmatches << "\n";
-            for(auto match: results)
-            {
-                uint8_t numberofcams = (int)match.camrayids.size();
+            for(auto &match : results) {
+                uint8_t numberofcams = (uint8_t)match.camrayids.size();
                 streamout.write((char*)&numberofcams, sizeof(uint8_t));
-                
-                float val = match.matchx;
-                streamout.write((char*)&val, sizeof(float));
-                val = match.matchy;
-                streamout.write((char*)&val, sizeof(float));
-                val = match.matchz;
-                streamout.write((char*)&val, sizeof(float));
-                val = match.matcherror;
-                streamout.write((char*)&val, sizeof(float));
-                for(auto camrayid:match.camrayids)
-                {
-                    uint8_t camid = (int)camrayid.camid;
-                    uint16_t rayid =(int)camrayid.rayid;
+                float val = match.matchx; streamout.write((char*)&val, sizeof(float));
+                val = match.matchy;       streamout.write((char*)&val, sizeof(float));
+                val = match.matchz;       streamout.write((char*)&val, sizeof(float));
+                val = match.matcherror;   streamout.write((char*)&val, sizeof(float));
+                for(auto &camrayid : match.camrayids) {
+                    uint8_t camid = (uint8_t)camrayid.camid;
+                    uint16_t rayid = (uint16_t)camrayid.rayid;
                     streamout.write((char*)&camid, sizeof(uint8_t));
                     streamout.write((char*)&rayid, sizeof(uint16_t));
                 }
             }
         }
 
+        #pragma omp critical(h5out)
         if (save_hdf5) {
-            // Write results to HDF5 file
             stm_file.write_matches(currentframe, results);
+            if (currentframe % 100 == 0) {
+                stm_file.flush();
+            }
         }
-        
-        currentframe++;
     }
-    unsigned int lastframe = currentframe;
-    if (lastframe != maxframes) {
-        std::cout << "Last frame was " << lastframe << " and not " << maxframes << std::endl;
-        stm_file.set_last_frame(lastframe);
+
+    if (save_hdf5) {
+        stm_file.set_last_frame(currentframe);
+        stm_file.~STM_File();
     }
-    rayfile.close();
+
     streamout.close();
-    
     
     std::clock_t tend = clock();
     double timing = double(tend - tstart) / CLOCKS_PER_SEC;

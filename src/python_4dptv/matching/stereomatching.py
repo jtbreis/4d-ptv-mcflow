@@ -1,5 +1,6 @@
 import subprocess
 import h5py
+import os
 
 from ..utils.structure import Filenames
 
@@ -32,9 +33,12 @@ class StereoMatching():
             groups = list(f.keys())
             return len(f[groups[0]].keys())
 
-    def run_stereomatching(self, nframes=None):
+    def run_stereomatching(self, nthreads=8, nframes=None):
         if nframes is not None:
             self.frames = nframes
+
+        env = os.environ.copy()
+        env["OMP_NUM_THREADS"] = f'{nthreads}'
         run_command = f'./STMCpp/STM -i {self.filename} -o {self.output} -f {self.frames} -c {self.mincameras} -d {self.maxdistance} -s {self.multiplematchesperraydistance} -m {self.maxmatchesperray} -x {self.nx} -y {self.ny} -z {self.nz} -b {self.minX} {self.maxX} {self.minY} {self.maxY} {self.minZ} {self.maxZ} --hdf5'
 
         # Launch the process
@@ -44,7 +48,8 @@ class StereoMatching():
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,           # automatically decode bytes to string
-            bufsize=1            # line-buffered
+            bufsize=1,            # line-buffered
+            env=env
         )
 
         # Continuously read lines as they are printed

@@ -138,6 +138,8 @@ void STM_File::open(std::string filename, const unsigned int maxframes, const un
 
 // Destructor method
 STM_File::~STM_File() {
+    f->flush(H5F_SCOPE_GLOBAL);
+    f->close();
     delete f;
 }
 
@@ -308,6 +310,13 @@ std::vector<candidatematch> STM_File::read_matches(const unsigned int frameno) {
     }
 
     return matches;
+}
+
+
+void STM_File::flush() {
+    if (opened && !readonly_mode) {
+        f->flush(H5F_SCOPE_GLOBAL);
+    }
 }
 
 void STM_File::set_last_frame(const unsigned int maxframes) {

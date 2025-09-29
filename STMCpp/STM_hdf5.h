@@ -47,6 +47,7 @@ class STM_File {
         // Instance methods
         void open(std::string filename);
         void open(std::string filename, const unsigned int maxframes, const unsigned int mincameras, const double maxdistance, const unsigned int maxmatchesperray, const unsigned int nx, const unsigned int ny, const unsigned int nz);
+        void flush();
         void write_matches(const unsigned int frameno, std::vector<candidatematch> &matches);
         std::vector<candidatematch> read_matches(const unsigned int frameno);
         void set_last_frame(const unsigned int maxframes);
