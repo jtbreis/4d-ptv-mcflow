@@ -34,3 +34,4 @@ settings.json
 *.egg
 dist/
 build/
+*.pyc
