@@ -59,12 +59,21 @@ for i, tr in enumerate(all_tracks):
         'vz_0': [tr.vz[0]],
         'vz_1': [tr.vz[1]],
         'vz_2': [tr.vz[2]],
+        'vmag_0': [tr.vmag[0]],
+        'vmag_1': [tr.vmag[1]],
+        'vmag_2': [tr.vmag[2]],
+        'vmean': [tr.vmean],
+        'vstd': [tr.vstd],
         'ax_0': [tr.ax[0]],
         'ax_1': [tr.ax[1]],
         'ay_0': [tr.ay[0]],
         'ay_1': [tr.ay[1]],
         'az_0': [tr.az[0]],
         'az_1': [tr.az[1]],
+        'amag_0': [tr.amag[0]],
+        'amag_1': [tr.amag[1]],
+        'amean': [tr.amean],
+        'astd': [tr.astd],
         'time': [tr.time]
     }))
 df = pd.concat(track_dicts, ignore_index=True)
