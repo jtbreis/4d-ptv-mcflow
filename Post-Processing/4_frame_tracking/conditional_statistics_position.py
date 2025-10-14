@@ -1,7 +1,7 @@
 # %%
 
 import matplotlib.pyplot as plt
-from mcflow_plotting.turbulence.pdf import plot_pdf
+from mcflow_plotting.turbulence.pdf import plot_pdf, plot_normalized_pdf
 import h5py
 import numpy as np
 import pandas as pd
@@ -15,19 +15,20 @@ binned_data_y = [[] for _ in range(num_bins)]
 
 # %%
 df = pd.read_parquet(filename)
-for index, row in df.iterrows():
-    y = row['Y']
-    vy = row['vy_1']
-    # Bin each vy value according to its corresponding y value
-    bin_idx = np.digitize(y, bin_edges) - 1
-    if 0 <= bin_idx < num_bins:
-        binned_data_vy[bin_idx].append(vy)
-        binned_data_y[bin_idx].append(y)
+# Assign each row to a bin based on 'Y'
+df['y_bin'] = pd.cut(df['Y'], bins=bin_edges,
+                     labels=False, include_lowest=True)
+
+# Group by bin and collect 'vy_1' and 'Y' values
+for bin_idx in range(num_bins):
+    bin_mask = df['y_bin'] == bin_idx
+    binned_data_vy[bin_idx] = df.loc[bin_mask, 'vy_1'].tolist()
+    binned_data_y[bin_idx] = df.loc[bin_mask, 'Y'].tolist()
 
 # %% VELOCITY Y
-samples = binned_data_vy[0]
+samples = binned_data_vy[-1]
 velocity_y = [data_point for data_point in samples]
-plot_pdf(velocity_y, scale=1000, variable='V_y')
+plot_normalized_pdf(velocity_y, scale=1000, variable='V_y')
 
 # %%
 samples = binned_data_vy[-1]

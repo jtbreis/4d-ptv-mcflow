@@ -1,29 +1,29 @@
 # %%
-from mcflow_plotting.turbulence.pdf import plot_pdf, plot_pdf_log
+from mcflow_plotting.turbulence.pdf import plot_pdf, plot_normalized_pdf, plot_pdf_log
 from mcflow_plotting.turbulence.velocity import plot_rms_velocity
 from mcflow_plotting.turbulence.velocity import plot_mean_vel_time
 import numpy as np
+import pandas as pd
 
-case = 'TTI_aligned_with_gravity'
-run = 'Run4'
-filename = f'/workspaces/4d-ptv-mcflow/data/julian/PTV_center/{case}/{run}/tracks.h5'
-output_path = f'/workspaces/4d-ptv-mcflow/data/julian/PTV_center/{case}'
+# Enable autoreload for interactive development
+%load_ext autoreload
+%autoreload 2
 
-samples = load_tracks(filename, 1e-3, 10)
+filename = '/workspaces/4d-ptv-mcflow/data/julian/PTV_center/TTI_opposing_gravity/TTI_opposing_gravity_tracks.parquet'
+df = pd.read_parquet(filename)
 
+# %% TODO add a method to plot the evolution of the data from every frame
 # %%
-track_lengths = [track.track_length for track in samples]
-mean_track_length = np.mean(track_lengths)
-print(f"Mean track length in samples: {mean_track_length}")
-print(f"Total number of tracks is {len(track_lengths)}")
-# %%
-time = [track.time for track in samples]
-# %%
-velocity_magnitudes = [np.mean(track.vmag) for track in samples]
-plot_pdf(velocity_magnitudes, scale=1000,
-         variable='||V||2', output=output_path)
-plot_mean_vel_time(velocity_magnitudes, time, scale=1000,
-                   variable='||V||^2', output=output_path)
+velocity_magnitudes = df['vmag_0']
+velocity_x = df['vx_0']
+time = df['time'] if 'time' in df.columns else np.arange(len(df))
+output_path = 'output'  # Adjust as needed
+samples = df.itertuples()
+plot_pdf([velocity_magnitudes, velocity_x], labels=['Mag', 'X'], scale=1000,
+         variable=r'\left|\left| V \right|\right|^2')
+plot_normalized_pdf(velocity_magnitudes, scale=1000)
+# plot_mean_vel_time(velocity_magnitudes, time, scale=1000,
+#                    variable='||V||^2', output=output_path)
 # %% VELOCITY X
 velocity_x = [np.mean(track.vx) for track in samples]
 plot_pdf(velocity_x, scale=1000, variable='V_x', output=output_path)

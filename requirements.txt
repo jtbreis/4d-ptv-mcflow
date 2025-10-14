@@ -3,3 +3,8 @@ scipy
 matplotlib
 h5py
 pandas
+ipykernel
+pyarrow
+-e 4BE-ETI
+-e mcflow_plotting
+-e PTVcalib
