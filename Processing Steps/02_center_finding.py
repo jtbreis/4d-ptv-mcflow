@@ -8,7 +8,7 @@ output_path = 'data/julian/PTV_center/TTI_aligned_with_gravity/Run1/'
 
 # %%
 center_finding = CenterFinding(file_path, output_path, 7)
-center_finding.remove_frames()
+center_finding.remove_frames()  # only necessary for 4 frame tracking
 # %%
 center_finding.test_parameters(200)
 # %%

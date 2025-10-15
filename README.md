@@ -30,3 +30,6 @@ You need to keep the terminal open in the background
 
 ## Run docker container
 `docker run -d -v /mnt/ssd:/workspaces/4d-ptv-mcflow/data --mount type=bind,source=/mnt/raid/,target=/workspaces/4d-ptv-mcflow/raw_data,readonly particle_tracking --case_name=CASE_NAME `
+
+Run after cloning!
+`git submodule init`
