@@ -1,48 +1,72 @@
 # %%
-from mcflow_plotting.turbulence.pdf import plot_pdf, plot_normalized_pdf, plot_pdf_log
+from mcflow_plotting.turbulence.pdf import plot_pdf, plot_normalized_pdf
 from mcflow_plotting.turbulence.velocity import plot_rms_velocity
 from mcflow_plotting.turbulence.velocity import plot_mean_vel_time
 import numpy as np
 import pandas as pd
+from IPython import get_ipython
 
-# Enable autoreload for interactive development
-%load_ext autoreload
-%autoreload 2
+try:
+    ip = get_ipython()
+    if ip is not None:
+        ip.run_line_magic('load_ext', 'autoreload')
+        ip.run_line_magic('autoreload', '2')
+except Exception:
+    # Not running in an IPython environment; skip autoreload
+    pass
 
-filename = '/workspaces/4d-ptv-mcflow/data/julian/PTV_center/TTI_opposing_gravity/TTI_opposing_gravity_tracks.parquet'
+case = 'TTI_opposing_gravity'
+filename = f'/workspaces/4d-ptv-mcflow/data/julian/PTV_center/{case}/{case}_tracks.parquet'
+# Adjust as needed
+output_path = f'/workspaces/4d-ptv-mcflow/data/julian/PTV_center/{case}/'
+
 df = pd.read_parquet(filename)
-
-# %% TODO add a method to plot the evolution of the data from every frame
-# %%
-velocity_magnitudes = df['vmag_0']
-velocity_x = df['vx_0']
 time = df['time'] if 'time' in df.columns else np.arange(len(df))
-output_path = 'output'  # Adjust as needed
-samples = df.itertuples()
-plot_pdf([velocity_magnitudes, velocity_x], labels=['Mag', 'X'], scale=1000,
-         variable=r'\left|\left| V \right|\right|^2')
-plot_normalized_pdf(velocity_magnitudes, scale=1000)
-# plot_mean_vel_time(velocity_magnitudes, time, scale=1000,
-#                    variable='||V||^2', output=output_path)
+# %% VELOCITY MAGNITUDE
+velocity_magnitudes = df[['vmag_0', 'vmag_1', 'vmag_2']].mean(axis=1)
+plot_normalized_pdf(velocity_magnitudes,
+                    variable=r'\left| \left | v \right| \right| ^2', scale=1000, output=output_path, name='vmag')
+
 # %% VELOCITY X
-velocity_x = [np.mean(track.vx) for track in samples]
-plot_pdf(velocity_x, scale=1000, variable='V_x', output=output_path)
-plot_mean_vel_time(velocity_x, time, scale=1000,
-                   variable='V_x', output=output_path)
+velocity_x = df[['vx_0', 'vx_1', 'vx_2']].mean(axis=1)
+plot_normalized_pdf(velocity_x,
+                    variable=r'v_\mathrm{x}', scale=1000, output=output_path, name='vx')
+
 # %% VELOCITY Y
-velocity_y = [np.mean(track.vy) for track in samples]
-plot_pdf(velocity_y, scale=1000, variable='V_y', output=output_path)
-plot_mean_vel_time(velocity_y, time, scale=1000,
-                   variable='V_y', output=output_path)
+velocity_y = df[['vy_0', 'vy_1', 'vy_2']].mean(axis=1)
+plot_normalized_pdf(velocity_y,
+                    variable=r'v_\mathrm{y}', scale=1000, output=output_path, name='vy')
 
 # %% VELOCITY Z
-velocity_z = [np.mean(track.vz) for track in samples]
-plot_pdf(velocity_z, scale=1000, variable='V_z', output=output_path)
-plot_mean_vel_time(velocity_z, time, scale=1000,
-                   variable='V_z', output=output_path)
+velocity_z = df[['vz_0', 'vz_1', 'vz_2']].mean(axis=1)
+plot_normalized_pdf(velocity_z,
+                    variable=r'v_\mathrm{z}', scale=1000, output=output_path, name='vz')
 
-# %%
-# acceleration_magnitude = [track.amag for track in samples]
-# plot_pdf_log(acceleration_magnitude)
+# %% All Velocities
+plot_pdf([velocity_magnitudes, velocity_x, velocity_y, velocity_z], labels=[r'$ \left|\left| v \right|\right|^2 $', '$v_\mathrm{x}$', '$v_\mathrm{y}$', '$v_\mathrm{z}$'], scale=1000,
+         variable=r'v_\mathrm{i}', xlim=[-2, 3.5], figsize=(6, 4), output=output_path, name='vi')
+
+# %% ACCELERATION MAGNITUDE
+acceleration_magnitudes = df[['amag_0', 'amag_1']].mean(axis=1)
+plot_normalized_pdf(acceleration_magnitudes,
+                    variable=r'\left| \left | a \right| \right| ^2', scale=1000, output=output_path, name='amag', log=True)
+
+# %% ACCELERATION X
+acceleration_x = df[['ax_0', 'ax_1']].mean(axis=1)
+plot_normalized_pdf(acceleration_x,
+                    variable=r'a_\mathrm{x}', unit='m/{s}^2', scale=1000, output=output_path, name='ax', log=True)
+
+# %% ACCELERATION Y
+acceleration_y = df[['ay_0', 'ay_1']].mean(axis=1)
+plot_normalized_pdf(acceleration_y,
+                    variable=r'a_\mathrm{y}', scale=1000, output=output_path, name='ay', log=True)
+# %% ACCELERATION Z
+acceleration_z = df[['az_0', 'az_1']].mean(axis=1)
+plot_normalized_pdf(acceleration_z,
+                    variable=r'a_\mathrm{z}', scale=1000, output=output_path, name='az', log=True)
+
+# %% All Accelerations
+plot_pdf([acceleration_magnitudes, acceleration_x, acceleration_y, acceleration_z], labels=[r'$ \left|\left| a \right|\right|^2 $', '$a_\mathrm{x}$', '$a_\mathrm{y}$', '$a_\mathrm{z}$'], scale=1000,
+         variable=r'a_\mathrm{i}', xlim=[-100, 100], figsize=(6, 4), output=output_path, name='ai', log=True)
 
 # %%
