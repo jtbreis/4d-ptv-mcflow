@@ -54,7 +54,7 @@ plot_normalized_pdf(acceleration_magnitudes,
 # %% ACCELERATION X
 acceleration_x = df[['ax_0', 'ax_1']].mean(axis=1)
 plot_normalized_pdf(acceleration_x,
-                    variable=r'a_\mathrm{x}', unit='m/{s}^2', scale=1000, output=output_path, name='ax', log=True)
+                    variable=r'a_\mathrm{x}', scale=1000, output=output_path, name='ax', log=True)
 
 # %% ACCELERATION Y
 acceleration_y = df[['ay_0', 'ay_1']].mean(axis=1)
@@ -67,6 +67,6 @@ plot_normalized_pdf(acceleration_z,
 
 # %% All Accelerations
 plot_pdf([acceleration_magnitudes, acceleration_x, acceleration_y, acceleration_z], labels=[r'$ \left|\left| a \right|\right|^2 $', '$a_\mathrm{x}$', '$a_\mathrm{y}$', '$a_\mathrm{z}$'], scale=1000,
-         variable=r'a_\mathrm{i}', xlim=[-100, 100], figsize=(6, 4), output=output_path, name='ai', log=True)
+         variable=r'a_\mathrm{i}', xlim=[-100, 100], figsize=(6, 4), output=output_path, name='ai', log=True, unit='m/{s}^2')
 
 # %%
