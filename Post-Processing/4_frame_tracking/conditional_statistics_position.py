@@ -1,14 +1,15 @@
 # %%
 
 import matplotlib.pyplot as plt
-from mcflow_plotting.turbulence.pdf import plot_pdf, plot_normalized_pdf
+from mcflow_plotting.turbulence.pdf import plot_pdf, plot_conditional_pdf, plot_conditional_normalized_pdf
 import h5py
 import numpy as np
 import pandas as pd
 
-filename = '/workspaces/4d-ptv-mcflow/data/julian/PTV_center/TTI_opposing_gravity/TTI_opposing_gravity_tracks.parquet'
+case = 'TTI_no_gravity'
+filename = f'/workspaces/4d-ptv-mcflow/data/julian/PTV_center/{case}/{case}_tracks_with_voronoi.parquet'
 
-num_bins = 10
+num_bins = 6
 bin_edges = np.linspace(-35, 35, num_bins + 1)
 binned_data_vy = [[] for _ in range(num_bins)]
 binned_data_y = [[] for _ in range(num_bins)]
@@ -16,19 +17,14 @@ binned_data_y = [[] for _ in range(num_bins)]
 # %%
 df = pd.read_parquet(filename)
 # Assign each row to a bin based on 'Y'
-df['y_bin'] = pd.cut(df['Y'], bins=bin_edges,
-                     labels=False, include_lowest=True)
-
-# Group by bin and collect 'vy_1' and 'Y' values
-for bin_idx in range(num_bins):
-    bin_mask = df['y_bin'] == bin_idx
-    binned_data_vy[bin_idx] = df.loc[bin_mask, 'vy_1'].tolist()
-    binned_data_y[bin_idx] = df.loc[bin_mask, 'Y'].tolist()
 
 # %% VELOCITY Y
-samples = binned_data_vy[-1]
-velocity_y = [data_point for data_point in samples]
-plot_normalized_pdf(velocity_y, scale=1000, variable='V_y')
+position_y = df['Y']
+velocity_y = df[['vx_0', 'vx_1', 'vx_2']].mean(axis=1)
+plot_conditional_pdf(position_y, velocity_y, bin_edges,
+                     scale=1000, variable='V_\mathrm{{y}}', condition_label='Y')
+plot_conditional_normalized_pdf(position_y, velocity_y, bin_edges,
+                                scale=1000, variable='V_\mathrm{{y}}', condition_label='Y')
 
 # %%
 samples = binned_data_vy[-1]

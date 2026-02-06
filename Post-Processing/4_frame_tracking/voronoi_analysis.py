@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 import numpy as np
 import pandas as pd
-from mcflow_plotting.turbulence.pdf import plot_pdf
+# from mcflow_plotting.turbulence.pdf import plot_pdf
 from IPython import get_ipython
 from pathlib import Path
 
@@ -92,6 +92,8 @@ plt.title('Voronoi volume PDF')
 plt.grid(True, which='both', ls='--', alpha=0.5)
 plt.ylim(5e-5, 1e0)
 plt.legend()
+pdf_file = Path(output_path) / 'voronoi_volume_pdf.pdf'
+plt.savefig(pdf_file, dpi=200, bbox_inches='tight')
 plt.show()
 
 # %%

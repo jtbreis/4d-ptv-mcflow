@@ -7,16 +7,16 @@ from python_4dptv.matching.stereomatching_error import evaluate_stereomatching_e
 
 os.chdir('/workspaces/4d-ptv-mcflow')
 # Set Folder
-folder = 'data/julian/PTV_center/Calibration/Tests'
+folder = '/workspaces/4d-ptv-mcflow/data/julian/PTV_below/Calibration/Tests'
 # Set StereoMatching Parameters
 mincameras = 3
 maxdistance = 0.2
 multiplematchesperraydistance = 1
 maxmatchesperray = 1
 # Number of Voxels in direction [nx, ny, nz]
-nvoxels = [600, 600, 500]
+nvoxels = [600, 800, 500]
 # Bounding Box [minX, maxX, minY, maxY, minZ, maxZ]
-boundingbox = [-50, 50, -35, 35, -20, 20]
+boundingbox = [-30, 30, -50, 50, -25, 25]
 # %% Run Ray Computation
 rays = Rays(folder)
 rays.compute_rays()
