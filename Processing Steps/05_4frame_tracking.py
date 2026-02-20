@@ -24,7 +24,7 @@ box_size_initial_z = 1
 box_size = 1
 # %%
 tracking = FourFrameTracking(folder, filename=filename, box_size_x=box_size_initial_x,
-                             box_size_y=box_size_initial_y, box_size_z=box_size_initial_z, box_size_track=box_size)
+                             box_size_y=box_size_initial_y, box_size_z=box_size_initial_z, box_size_track=box_size, dt=1e-3, rep_rate=10, write_paraview=True)
 
 # %%
 tracking.run_tracking(20)

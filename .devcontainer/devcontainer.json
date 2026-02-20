@@ -8,10 +8,6 @@
             "version": "3.10"
         }
     },
-    "containerEnv": {
-        "MWI_APP_PORT": "8888"
-    },
-    "forwardPorts": [8888],
     "postCreateCommand": "sudo apt-get update && sudo apt-get install -y build-essential g++ libhdf5-dev && pip install -r requirements.txt",
     "customizations": {
         "vscode": {
@@ -30,7 +26,7 @@
         }
     },
     "mounts": [
-        "source=/mnt/raid/processed_data/ssd/,target=/workspaces/4d-ptv-mcflow/data,type=bind,consistency=cached",
-        "source=/mnt/raid/,target=/workspaces/4d-ptv-mcflow/raw_data,type=bind,consistency=cached",
+        "source=/mnt/ssd/,target=/workspaces/4d-ptv-mcflow/data,type=bind,consistency=cached",
+        "source=/mnt/raid/,target=/workspaces/4d-ptv-mcflow/raw_data,type=bind,consistency=cached"
     ]
 }
