@@ -44,6 +44,8 @@ def evaluate_stereomatching_error(path, boundingbox):
               XYZstm[:, 2] - closest_matches[:, 2],
               distances]
 
+    plot_mean_error_vs_z(unique_z, XYZstm, errors, path)
+
     max_errors = [np.max(np.abs(err)) for err in errors]
 
     for z_val in unique_z:
@@ -71,12 +73,48 @@ def evaluate_stereomatching_error(path, boundingbox):
         plt.show()
 
 
+def plot_mean_error_vs_z(unique_z, XYZstm, errors, folder):
+    """Plot mean absolute error in X, Y, Z and mean distance vs Z location."""
+    z_locations = []
+    mean_x, mean_y, mean_z, mean_dist = [], [], [], []
+    for z_val in unique_z:
+        mask = np.abs(XYZstm[:, 2] - z_val) <= 1.0
+        if np.sum(mask) == 0:
+            continue
+        z_locations.append(z_val)
+        mean_x.append(np.mean(np.abs(errors[0][mask])))
+        mean_y.append(np.mean(np.abs(errors[1][mask])))
+        mean_z.append(np.mean(np.abs(errors[2][mask])))
+        mean_dist.append(np.mean(errors[3][mask]))
+    z_locations = np.array(z_locations)
+    mean_x, mean_y, mean_z = np.array(mean_x), np.array(mean_y), np.array(mean_z)
+    mean_dist = np.array(mean_dist)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(z_locations, mean_x, 'o-', label='Mean |X error|')
+    ax.plot(z_locations, mean_y, 's-', label='Mean |Y error|')
+    ax.plot(z_locations, mean_z, '^-', label='Mean |Z error|')
+    ax.plot(z_locations, mean_dist, 'd-', label='Mean distance error')
+    ax.set_xlabel('Z location')
+    ax.set_ylabel('Mean error')
+    ax.set_title('Mean stereomatching error vs Z location')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(os.path.join(folder, "error_plots/mean_error_vs_z.pdf"))
+    plt.show()
+
+
 def error_histogram(distances, folder):
+    mean_error = np.mean(distances)
     plt.figure(figsize=(8, 5))
     plt.hist(distances, bins=50, color='skyblue', edgecolor='black')
+    plt.axvline(mean_error, color='red', linestyle='--', linewidth=2,
+                label=f'Mean error = {mean_error:.4f}')
     plt.xlabel('Distance to Closest Match')
     plt.ylabel('Frequency')
     plt.title('Histogram of Stereomatching Error Distances')
+    plt.legend()
     plt.tight_layout()
     plt.savefig(os.path.join(folder, "error_plots/distance_histogram.pdf"))
     plt.show()
