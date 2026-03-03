@@ -7,106 +7,70 @@ import os
 from scipy.spatial import cKDTree
 
 
-def compute_mean_stereomatching_error(path, remove_offset=False):
+def _compute_distances_to_known(XYZstm, XYZknown, remove_offset=False):
     """
-    Compute mean distance error between stereo-matched 3D positions and known
-    grid positions from Centers. Returns mean error in mm (no plotting).
+    Compute distances from stereo-matched points to nearest known grid point.
+    XYZstm, XYZknown: (N, 3) and (M, 3). Returns distances (1d) and err_x, err_y, err_z.
     """
-    path = path.rstrip(os.sep)
-    with h5py.File(path + Filenames.STM.value, "r") as f:
-        XYZe = np.empty(len(f.keys()), dtype=object)
-        for frame_idx, frame in enumerate(f.values()):
-            XYZe[frame_idx] = np.array(frame['xyze']).transpose()
-        XYZstm = np.vstack(XYZe)
-
-    centers_folder = None
-    for subfolder in ("/Centers", "/Tests/Centers", "/Calibration/Tests/Centers/Camera"):
-        cand = path + subfolder
-        if os.path.isdir(cand) and any(f.endswith(".h5") for f in os.listdir(cand)):
-            centers_folder = cand
-            break
-    if centers_folder is None:
-        raise FileNotFoundError(
-            f"Centers folder not found under {path}. Looked for .../Centers, .../Tests/Centers, "
-            f".../Calibration/Tests/Centers/Camera"
-        )
-    h5_files = [os.path.join(centers_folder, fname) for fname in os.listdir(centers_folder) if fname.endswith(".h5")]
-    h5_files.sort()
-
-    camera_data = np.empty(len(h5_files), dtype=object)
-    for camidx, h5_file in enumerate(h5_files):
-        with h5py.File(h5_file, "r") as f:
-            XYZk = np.empty(len(f.keys()), dtype=object)
-            for frame_idx, frame in enumerate(f.values()):
-                XYZk[frame_idx] = np.array(frame['XYZ'])
-        camera_data[camidx] = np.vstack(XYZk)
-
-    XYZknown = np.vstack(camera_data)
-    XYZknown = np.unique(XYZknown, axis=0)
-
     tree = cKDTree(XYZknown)
-    distances, indices = tree.query(XYZstm[:, :3], k=1)
-    distances = np.atleast_1d(np.squeeze(distances))
+    dists, indices = tree.query(XYZstm, k=1)
+    dists = np.atleast_1d(np.squeeze(dists))
     indices = np.atleast_1d(np.squeeze(indices))
+    closest = XYZknown[indices]
+    err_x = XYZstm[:, 0] - closest[:, 0]
+    err_y = XYZstm[:, 1] - closest[:, 1]
+    err_z = XYZstm[:, 2] - closest[:, 2]
     if remove_offset:
-        closest = XYZknown[indices]
-        err_x = XYZstm[:, 0] - closest[:, 0]
-        err_y = XYZstm[:, 1] - closest[:, 1]
-        err_z = XYZstm[:, 2] - closest[:, 2]
         offset_x, offset_y, offset_z = np.mean(err_x), np.mean(err_y), np.mean(err_z)
-        distances = np.sqrt((err_x - offset_x)**2 + (err_y - offset_y)**2 + (err_z - offset_z)**2)
-    return float(np.mean(distances))
+        dists = np.sqrt((err_x - offset_x)**2 + (err_y - offset_y)**2 + (err_z - offset_z)**2)
+    return dists, err_x, err_y, err_z
+
+
+def _load_xyz_known_from_centers_folder(centers_folder):
+    """Load and merge XYZ from all camera H5 files in centers_folder. Returns (N, 3) unique points."""
+    h5_files = sorted(
+        os.path.join(centers_folder, f) for f in os.listdir(centers_folder) if f.endswith(".h5")
+    )
+    camera_data = []
+    for h5_file in h5_files:
+        with h5py.File(h5_file, "r") as f:
+            XYZk = np.vstack([np.array(f[k]["XYZ"]) for k in f.keys()])
+        camera_data.append(XYZk)
+    XYZknown = np.unique(np.vstack(camera_data), axis=0)
+    return XYZknown[:, :3]
 
 
 def compute_stereomatching_error_by_layers(path, calibration_layer_indices, remove_offset=False):
     """
     Compute mean stereomatching error (mm) separately on calibration layers and
     on in-between (hold-out) layers. Returns (mean_error_cal_layers, mean_error_in_between_layers).
+    path: folder containing STM output and Centers (e.g. .../Tests).
     calibration_layer_indices: array or list of frame/layer indices used for calibration.
     """
     path = path.rstrip(os.sep)
     calibration_layer_indices = np.asarray(calibration_layer_indices, dtype=int)
 
-    centers_folder = path.rstrip(os.sep) + "/Tests/Centers"
+    centers_folder = os.path.join(path, "Centers")
     if not os.path.isdir(centers_folder):
         raise FileNotFoundError(f"Centers folder not found: {centers_folder}")
-    h5_files = [os.path.join(centers_folder, fn) for fn in os.listdir(centers_folder) if fn.endswith(".h5")]
-    h5_files.sort()
-    # Load known XYZ per frame from first camera
+    h5_files = sorted(os.path.join(centers_folder, f) for f in os.listdir(centers_folder) if f.endswith(".h5"))
     with h5py.File(h5_files[0], "r") as fc:
         frame_keys = sorted(fc.keys(), key=lambda x: int(x.replace("frame", "")) if x.startswith("frame") else 0)
-        XYZknown_per_frame = [np.atleast_2d(np.array(fc[k]['XYZ']))[:, :3] for k in frame_keys]
+        XYZknown_per_frame = [np.atleast_2d(np.array(fc[k]["XYZ"]))[:, :3] for k in frame_keys]
 
     mean_error_per_frame = []
     with h5py.File(path + Filenames.STM.value, "r") as f:
         keys = sorted(f.keys(), key=lambda x: int(x.replace("frame", "")) if x.startswith("frame") else 0)
         for frame_idx, key in enumerate(keys):
-            frame = f[key]
-            XYZstm_f = np.array(frame['xyze']).transpose()
-            if XYZstm_f.size == 0:
-                mean_error_per_frame.append(np.nan)
-                continue
-            XYZstm_f = np.atleast_2d(XYZstm_f)[:, :3]
-
-            if frame_idx >= len(XYZknown_per_frame):
+            XYZstm_f = np.atleast_2d(np.array(f[key]["xyze"]).transpose())[:, :3]
+            if XYZstm_f.size == 0 or frame_idx >= len(XYZknown_per_frame):
                 mean_error_per_frame.append(np.nan)
                 continue
             XYZknown_f = XYZknown_per_frame[frame_idx]
             if XYZknown_f.size == 0:
                 mean_error_per_frame.append(np.nan)
                 continue
-
-            tree = cKDTree(XYZknown_f)
-            distances, indices = tree.query(XYZstm_f, k=1)
-            distances = np.atleast_1d(np.squeeze(distances))
-            if remove_offset:
-                indices = np.atleast_1d(np.squeeze(indices))
-                closest = XYZknown_f[indices]
-                err_x = XYZstm_f[:, 0] - closest[:, 0]
-                err_y = XYZstm_f[:, 1] - closest[:, 1]
-                err_z = XYZstm_f[:, 2] - closest[:, 2]
-                offset_x, offset_y, offset_z = np.mean(err_x), np.mean(err_y), np.mean(err_z)
-                distances = np.sqrt((err_x - offset_x)**2 + (err_y - offset_y)**2 + (err_z - offset_z)**2)
+            distances, _, _, _ = _compute_distances_to_known(XYZstm_f, XYZknown_f, remove_offset)
             mean_error_per_frame.append(float(np.mean(distances)))
 
     mean_error_per_frame = np.array(mean_error_per_frame)
@@ -129,61 +93,33 @@ def compute_stereomatching_error_by_layers(path, calibration_layer_indices, remo
 def evaluate_stereomatching_error(path, boundingbox, remove_offset=False, plot_suffix=''):
     """
     Evaluate stereo matching error (stereo XYZ vs known grid from Centers).
+    path: folder that contains a "Tests" subfolder with STM output and Centers.
 
     If remove_offset is True, subtract the mean error in x, y, z before computing
-    distances and plots, so only residual error is reported (e.g. for
-    Calibration_After where the target was moved and a constant offset is expected).
+    distances and plots (e.g. for Calibration_After where a constant offset is expected).
     plot_suffix is appended to output filenames (e.g. '_after') when not empty.
     """
-    
-    with h5py.File(path + "/Tests" + Filenames.STM.value, "r") as f:
-        XYZe = np.empty(len(f.keys()), dtype=object)
-        for frame_idx, frame in enumerate(f.values()):
-            XYZe[frame_idx] = np.array(frame['xyze']).transpose()
-        XYZstm = np.vstack(XYZe)
-
-    centers_folder = path.rstrip(os.sep) + "/Tests/Centers"
+    path = path.rstrip(os.sep)
+    stm_path = os.path.join(path, "Tests") + Filenames.STM.value
+    centers_folder = os.path.join(path, "Tests", "Centers")
     if not os.path.isdir(centers_folder):
         raise FileNotFoundError(f"Centers folder not found: {centers_folder}")
-    h5_files = [os.path.join(centers_folder, fname) for fname in os.listdir(centers_folder) if fname.endswith(".h5")]
-    h5_files.sort()
 
-    camera_data = np.empty(len(h5_files), dtype=object)
-    for camidx, h5_file in enumerate(h5_files):
-        with h5py.File(h5_file, "r") as f:
-            XYZk = np.empty(len(f.keys()), dtype=object)
-            for frame_idx, frame in enumerate(f.values()):
-                XYZk[frame_idx] = np.array(frame['XYZ'])
-        camera_data[camidx] = np.vstack(XYZk)
+    with h5py.File(stm_path, "r") as f:
+        XYZstm = np.vstack([np.array(frame["xyze"]).transpose() for frame in f.values()])[:, :3]
 
-    XYZknown = np.vstack(camera_data)
-    XYZknown = np.unique(XYZknown, axis=0)
+    XYZknown = _load_xyz_known_from_centers_folder(centers_folder)
+    distances, err_x, err_y, err_z = _compute_distances_to_known(XYZstm, XYZknown, remove_offset)
 
-    tree = cKDTree(XYZknown)
-    distances, indices = tree.query(XYZstm[:, :-1])
-    closest_matches = XYZknown[indices]
-
-    err_x = XYZstm[:, 0] - closest_matches[:, 0]
-    err_y = XYZstm[:, 1] - closest_matches[:, 1]
-    err_z = XYZstm[:, 2] - closest_matches[:, 2]
-
-    if remove_offset:
-        offset_x, offset_y, offset_z = np.mean(err_x), np.mean(err_y), np.mean(err_z)
-        err_x = err_x - offset_x
-        err_y = err_y - offset_y
-        err_z = err_z - offset_z
-        distances = np.sqrt(err_x**2 + err_y**2 + err_z**2)
-
-    error_histogram(distances, path, plot_suffix=plot_suffix,
-                   title_suffix=' (offset removed)' if remove_offset else '')
+    title_suffix = " (offset removed)" if remove_offset else ""
+    error_histogram(distances, path, plot_suffix=plot_suffix, title_suffix=title_suffix)
 
     unique_z = np.unique(XYZknown[:, 2])
 
     labels = ['X Error', 'Y Error', 'Z Error', 'Distance Error']
     errors = [err_x, err_y, err_z, distances]
 
-    plot_mean_error_vs_z(unique_z, XYZstm, errors, path, plot_suffix=plot_suffix,
-                         title_suffix=' (offset removed)' if remove_offset else '')
+    plot_mean_error_vs_z(unique_z, XYZstm, errors, path, plot_suffix=plot_suffix, title_suffix=title_suffix)
 
     max_errors = [np.max(np.abs(err)) for err in errors]
 
