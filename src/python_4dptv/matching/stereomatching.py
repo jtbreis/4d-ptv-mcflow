@@ -59,12 +59,14 @@ class StereoMatching():
         # Wait for the process to finish
         proc.wait()
 
-    def plot_matches(self):
+    def plot_matches(self, external_path=None):
+        if external_path is None:
+            external_path = self.path
         with h5py.File(self.path + Filenames.STM.value, "r") as f:
             for frame_idx, frame in enumerate(f.values()):
                 XYZe = frame['xyze']
                 plot_particles_xyze(XYZe, self.boundingbox,
-                                    self.path, frame_idx)
+                                    external_path, frame_idx)
 
     def plot_matches_frame(self, eval_frame):
         with h5py.File(self.path + Filenames.STM.value, "r") as f:

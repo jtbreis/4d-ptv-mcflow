@@ -8,25 +8,25 @@ os.chdir('/workspaces/4d-ptv-mcflow')
 %autoreload 2
 # %%
 
-cameras = [4]
-folder_path = '/workspaces/4d-ptv-mcflow/raw_data/2025-11-10-ParticleTracking_BelowTTI/Calibration_Before'
-output_path = 'data/julian/PTV_below'
+cameras = [1, 2]
+folder_path = '/workspaces/4d-ptv-mcflow/raw_data/2025-09-11-ParticleTracking/Calibration_After'
+output_path = 'data/julian/PTV_upstream'
 calibration_grid_path = 'PTVcalib/calibration_targets/TSI_5mm_backlight_nX39_nY39.csv'
 
 calibration_method = '4d-ptv'
 grid_spacing = 5.0  # in mm
-z_min = -25  # in mm
-z_max = 25  # in mm
+z_min = -20  # in mm
+z_max = 20  # in mm
 
 target_point_diameter = 20
-number_of_planes = 51
+number_of_planes = 41
 
 # %%
 calibration = Calibration(cameras=cameras, folder_path=folder_path, output_path=output_path, calibration_grid_path=calibration_grid_path,
                           grid_spacing=grid_spacing, target_point_diameter=target_point_diameter, z_min=z_min, z_max=z_max, n_planes=number_of_planes, calibration_method=calibration_method)
-calibration.set_plotting_mode('Normal')
+calibration.set_plotting_mode('None')
 # %%
-calibration.preprocess_images(enhance_contrast='None')
+calibration.preprocess_images(enhance_contrast='None', edge_margin=10)
 # %% Optional: interactively remove spurious points (Jupyter / Run Cell)
 # For each (camera, plane) an image is shown; type an index (or "5,6,7") to remove points, or Enter for next.
 # Single image: calibration.interactively_remove_detected_points(cam_idx=0, plane_idx=0)
@@ -40,3 +40,5 @@ calibration.match_calibration_grid(center_find_method='TSI-backlight')
 # %%
 calibration.write_matches()
 calibration.write_calibration_test_files()
+
+# %%

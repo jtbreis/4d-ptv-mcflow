@@ -12,9 +12,15 @@ from ..utils.structure import Filenames, Folders
 
 
 class Rays():
-    def __init__(self, path):
+    def __init__(self, path, calibration_folder=None):
+        """
+        path: folder containing Centers/ and where rays will be read/written.
+        calibration_folder: if set, load calib.h5 from this folder (e.g. test
+            Calibration_Before calibration on points from Calibration_After).
+        """
         self.path = path
-        self.calibration = import_calibration(path)
+        calib_path = calibration_folder if calibration_folder is not None else path
+        self.calibration = import_calibration(calib_path)
         self.ncameras = self.calibration.shape[0]
         self.centers = np.empty(self.ncameras, dtype=object)
         self.XYZ = np.empty(self.ncameras, dtype=object)
@@ -25,7 +31,9 @@ class Rays():
 
     def load_centers(self):
         folder = self.path + Folders.CENTERS.value
-        files = sorted(os.listdir(folder))
+        if not os.path.isdir(folder):
+            raise FileNotFoundError(f"Centers folder not found: {folder}")
+        files = sorted(f for f in os.listdir(folder) if f.endswith(".h5"))
         for idx, file in enumerate(files):
             self.centers[idx] = read_h5_centers(
                 os.path.join(folder, file))
