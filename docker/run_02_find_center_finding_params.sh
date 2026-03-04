@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Build and run the center-finding parameter search (02A) container for one or more cases.
+# Build and run the 02_find_center_finding_parameters container for one or more cases.
 #
 # Usage:
-#   ./run_02A_center_finding_params.sh build
-#   ./run_02A_center_finding_params.sh run Run1
-#   ./run_02A_center_finding_params.sh run Run2
-#   ./run_02A_center_finding_params.sh run Run1 Run2 Run3
-#   ./run_02A_center_finding_params.sh run --detached Run1   # run in background
+#   ./run_02_find_center_finding_params.sh build
+#   ./run_02_find_center_finding_params.sh run Run1
+#   ./run_02_find_center_finding_params.sh run Run2
+#   ./run_02_find_center_finding_params.sh run Run1 Run2 Run3
+#   ./run_02_find_center_finding_params.sh run --detached Run1   # run in background
 #
 # Data is read from REPO_ROOT/raw_data and written to REPO_ROOT/data by default.
 # Override: RAW_DATA_DIR, OUTPUT_DIR. For a custom layout under the mount set
@@ -15,7 +15,7 @@
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-IMAGE_NAME="${IMAGE_NAME:-4d-ptv-center-finding-params}"
+IMAGE_NAME="${IMAGE_NAME:-4d-ptv-02-find-center-finding-params}"
 
 RAW_DATA_DIR="${RAW_DATA_DIR:-$REPO_ROOT/raw_data}"
 OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/data}"
@@ -27,7 +27,7 @@ build() {
 
 run_one() {
   local run="$1"
-  echo "Running center-finding parameter search for run: $run${CASE:+ case=$CASE}${DATASET:+ dataset=$DATASET}${DETACHED:+ (detached)}"
+  echo "Running 02_find_center_finding_parameters for run: $run${CASE:+ case=$CASE}${DATASET:+ dataset=$DATASET}${DETACHED:+ (detached)}"
   docker run --rm ${DETACHED:+-d} \
     -v "$RAW_DATA_DIR:/workspaces/4d-ptv-mcflow/raw_data:ro" \
     -v "$OUTPUT_DIR:/workspaces/4d-ptv-mcflow/data" \
@@ -62,8 +62,8 @@ case "${1:-}" in
   *)
     echo "Usage: $0 {build|run} [RUN_NAME ...]"
     echo ""
-    echo "  build              Build the Docker image"
-    echo "  run [--detached|-d] Run1 [Run2 ...]  Run 02A (add --detached to run in background)"
+    echo "  build              Build the Docker image for 02_find_center_finding_parameters"
+    echo "  run [--detached|-d] Run1 [Run2 ...]  Run 02_find_center_finding_parameters (add --detached to run in background)"
     echo ""
     echo "Optional env: RAW_DATA_DIR, OUTPUT_DIR, IMAGE_NAME, RAW_DATA_BASE, OUTPUT_BASE, CASE, DATASET, DETACHED"
     exit 1

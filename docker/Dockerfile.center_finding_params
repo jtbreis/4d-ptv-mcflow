@@ -1,5 +1,5 @@
-# Dockerfile for center-finding parameter search (02A)
-# Same base as process_data; runs 02A_find_center_finding_parameters.py for configurable cases.
+# Dockerfile for 02_find_center_finding_parameters
+# Same base as process_data; runs 02_find_center_finding_parameters.py for configurable cases.
 
 FROM ubuntu:24.04
 
@@ -34,6 +34,6 @@ RUN /opt/venv/bin/pip install .
 ENV PATH="/opt/venv/bin:$PATH"
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
-# Run 02A script; pass args for different cases (e.g. --run Run1, --run Run2)
-ENTRYPOINT ["python3", "Processing Steps/02A_find_center_finding_parameters.py"]
+# Run 02_find_center_finding_parameters; pass args for different cases (e.g. --run Run1, --run Run2)
+ENTRYPOINT ["python3", "Processing Tools/02_find_center_finding_parameters.py"]
 CMD ["--run", "Run1"]

@@ -8,7 +8,7 @@ import argparse
 os.chdir('/workspaces/4d-ptv-mcflow')
 
 # Default case name and dated dataset folder (used when --raw-data-base/--output-base not set)
-_DEFAULT_CASE = 'TTI_aligned_with_gravity'
+_DEFAULT_CASE = 'TTI_opposing_gravity'
 _DEFAULT_DATASET = '2025-09-11-ParticleTracking'
 
 
@@ -71,7 +71,8 @@ base_path = os.path.join(args.raw_data_base, run)
 output_path = os.path.join(args.output_base, run)
 cameras = [c.strip() for c in args.cameras.split(',') if c.strip()]
 
-print(f"Center-finding parameter search: case={args.case}, dataset={args.dataset}, run={run}")
+print(
+    f"Center-finding parameter search: case={args.case}, dataset={args.dataset}, run={run}")
 print(f"  base_path={base_path}, output_path={output_path}")
 
 # %%
