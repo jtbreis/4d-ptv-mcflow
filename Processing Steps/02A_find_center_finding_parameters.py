@@ -7,6 +7,10 @@ import argparse
 
 os.chdir('/workspaces/4d-ptv-mcflow')
 
+# Default case name and dated dataset folder (used when --raw-data-base/--output-base not set)
+_DEFAULT_CASE = 'TTI_aligned_with_gravity'
+_DEFAULT_DATASET = '2025-09-11-ParticleTracking'
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -16,19 +20,31 @@ def parse_args():
         '--run',
         type=str,
         default='Run1',
-        help='Run/case name (e.g. Run1, Run2). Used in paths under raw_data and output.',
+        help='Run name (e.g. Run1, Run2). Appended to raw/output base paths.',
+    )
+    parser.add_argument(
+        '--case',
+        type=str,
+        default=_DEFAULT_CASE,
+        help='Case/experiment name (e.g. TTI_aligned_with_gravity). Used in paths: .../{case}/{run}.',
+    )
+    parser.add_argument(
+        '--dataset',
+        type=str,
+        default=_DEFAULT_DATASET,
+        help='Dated dataset folder for raw path (e.g. 2025-09-11-ParticleTracking). Raw: .../raw_data/{dataset}/{case}/{run}.',
     )
     parser.add_argument(
         '--raw-data-base',
         type=str,
-        default='raw_data/2025-09-11-ParticleTracking/TTI_aligned_with_gravity',
-        help='Base path for raw .cine data (run name is appended).',
+        default=None,
+        help='Override: full base path for raw .cine data (run appended). If unset, uses raw_data/{dataset}/{case}.',
     )
     parser.add_argument(
         '--output-base',
         type=str,
-        default='data/julian/PTV_center/TTI_aligned_with_gravity',
-        help='Base path for output (run name is appended).',
+        default=None,
+        help='Override: full base path for output (run appended). If unset, uses data/PTV_center/{case}.',
     )
     parser.add_argument(
         '--cameras',
@@ -46,12 +62,17 @@ def parse_args():
 
 
 args = parse_args()
+if args.raw_data_base is None:
+    args.raw_data_base = os.path.join('raw_data', args.dataset, args.case)
+if args.output_base is None:
+    args.output_base = os.path.join('data', 'PTV_center', args.case)
 run = args.run
 base_path = os.path.join(args.raw_data_base, run)
 output_path = os.path.join(args.output_base, run)
 cameras = [c.strip() for c in args.cameras.split(',') if c.strip()]
 
-print(f"Center-finding parameter search: run={run}, base_path={base_path}, output_path={output_path}")
+print(f"Center-finding parameter search: case={args.case}, dataset={args.dataset}, run={run}")
+print(f"  base_path={base_path}, output_path={output_path}")
 
 # %%
 parameter_sets = []

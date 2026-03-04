@@ -1,0 +1,8 @@
+# Docker build: no editable submodules (4BE-ETI, mcflow_plotting installed separately if present)
+numpy
+scipy
+matplotlib
+h5py
+pandas
+ipykernel
+pyarrow

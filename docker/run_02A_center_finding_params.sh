@@ -6,9 +6,11 @@
 #   ./run_02A_center_finding_params.sh run Run1
 #   ./run_02A_center_finding_params.sh run Run2
 #   ./run_02A_center_finding_params.sh run Run1 Run2 Run3
+#   ./run_02A_center_finding_params.sh run --detached Run1   # run in background
 #
 # Data is read from REPO_ROOT/raw_data and written to REPO_ROOT/data by default.
-# Override with RAW_DATA_DIR and OUTPUT_DIR env vars.
+# Override: RAW_DATA_DIR, OUTPUT_DIR. For a custom layout under the mount set
+# RAW_DATA_BASE=raw_data/{dataset}/{case} (path inside container, e.g. raw_data/2025-10-15-ParticleTracking/TTI_aligned_with_gravity).
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,12 +27,16 @@ build() {
 
 run_one() {
   local run="$1"
-  echo "Running center-finding parameter search for case: $run"
-  docker run --rm \
+  echo "Running center-finding parameter search for run: $run${CASE:+ case=$CASE}${DATASET:+ dataset=$DATASET}${DETACHED:+ (detached)}"
+  docker run --rm ${DETACHED:+-d} \
     -v "$RAW_DATA_DIR:/workspaces/4d-ptv-mcflow/raw_data:ro" \
     -v "$OUTPUT_DIR:/workspaces/4d-ptv-mcflow/data" \
     "$IMAGE_NAME" \
-    --run "$run"
+    --run "$run" \
+    ${RAW_DATA_BASE:+--raw-data-base "$RAW_DATA_BASE"} \
+    ${OUTPUT_BASE:+--output-base "$OUTPUT_BASE"} \
+    ${CASE:+--case "$CASE"} \
+    ${DATASET:+--dataset "$DATASET"}
 }
 
 case "${1:-}" in
@@ -39,9 +45,13 @@ case "${1:-}" in
     ;;
   run)
     shift || true
+    case "${1:-}" in
+      -d|--detached) DETACHED=1; shift ;;
+    esac
     if [ $# -eq 0 ]; then
-      echo "Usage: $0 run RUN_NAME [RUN_NAME ...]"
+      echo "Usage: $0 run [--detached | -d] RUN_NAME [RUN_NAME ...]"
       echo "Example: $0 run Run1 Run2"
+      echo "Example: $0 run --detached Run1"
       exit 1
     fi
     build 2>/dev/null || true
@@ -53,9 +63,9 @@ case "${1:-}" in
     echo "Usage: $0 {build|run} [RUN_NAME ...]"
     echo ""
     echo "  build              Build the Docker image"
-    echo "  run Run1 [Run2 ...] Run 02A for one or more cases (builds image if missing)"
+    echo "  run [--detached|-d] Run1 [Run2 ...]  Run 02A (add --detached to run in background)"
     echo ""
-    echo "Optional env: RAW_DATA_DIR, OUTPUT_DIR, IMAGE_NAME"
+    echo "Optional env: RAW_DATA_DIR, OUTPUT_DIR, IMAGE_NAME, RAW_DATA_BASE, OUTPUT_BASE, CASE, DATASET, DETACHED"
     exit 1
     ;;
 esac

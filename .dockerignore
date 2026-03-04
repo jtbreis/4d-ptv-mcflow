@@ -5,4 +5,7 @@
 !src/**
 !STMCpp/**
 !requirements.txt
+!requirements-docker.txt
 !pyproject.toml
+!4BE-ETI/**
+!mcflow_plotting/**

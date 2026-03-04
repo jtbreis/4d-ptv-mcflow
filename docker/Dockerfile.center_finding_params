@@ -22,7 +22,11 @@ RUN cd STMCpp && make
 
 RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip install -r /workspaces/4d-ptv-mcflow/requirements.txt
+    && /opt/venv/bin/pip install -r /workspaces/4d-ptv-mcflow/requirements-docker.txt
+
+# Optional: install submodules if present (git submodule update --init before build)
+RUN if [ -d 4BE-ETI ] && [ -f 4BE-ETI/pyproject.toml ]; then /opt/venv/bin/pip install -e ./4BE-ETI; fi
+RUN if [ -d mcflow_plotting ] && [ -f mcflow_plotting/pyproject.toml ]; then /opt/venv/bin/pip install -e ./mcflow_plotting; fi
 
 RUN cd PTVcalib && /opt/venv/bin/pip install .
 RUN /opt/venv/bin/pip install .
