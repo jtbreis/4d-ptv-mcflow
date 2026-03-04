@@ -18,7 +18,7 @@ class CenterFinding():
         self.particle_diameter = particle_diameter
         self.threshold = threshold
         self.minmass = minmass
-        self.separation = int(self.particle_diameter/2)
+        self.separation = int(particle_diameter / 2)  # can be overridden for parameter search
         self.frames_discarded = False
 
     def remove_frames(self, discard_frames=1, tracking_frames=4):

@@ -1,0 +1,35 @@
+# Dockerfile for center-finding parameter search (02A)
+# Same base as process_data; runs 02A_find_center_finding_parameters.py for configurable cases.
+
+FROM ubuntu:24.04
+
+# Install Python and C++ build essentials
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 \
+        python3-venv \
+        python3-pip \
+        build-essential \
+        g++ \
+        libhdf5-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+# Copy the code from the host into the container
+COPY . /workspaces/4d-ptv-mcflow
+WORKDIR /workspaces/4d-ptv-mcflow
+
+RUN cd STMCpp && make
+
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install -r /workspaces/4d-ptv-mcflow/requirements.txt
+
+RUN cd PTVcalib && /opt/venv/bin/pip install .
+RUN /opt/venv/bin/pip install .
+
+ENV PATH="/opt/venv/bin:$PATH"
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+
+# Run 02A script; pass args for different cases (e.g. --run Run1, --run Run2)
+ENTRYPOINT ["python3", "Processing Steps/02A_find_center_finding_parameters.py"]
+CMD ["--run", "Run1"]
