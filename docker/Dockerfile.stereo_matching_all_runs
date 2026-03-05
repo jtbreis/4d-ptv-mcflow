@@ -1,0 +1,28 @@
+# Stereo matching only (rays + stereo matching for all runs in a case).
+# Runs: Processing Tools/run_stereo_matching_all_runs.py
+# Run after center finding. Does not require 4BE-ETI.
+
+FROM ubuntu:24.04
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 python3-venv python3-pip build-essential g++ libhdf5-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+COPY . /workspaces/4d-ptv-mcflow
+WORKDIR /workspaces/4d-ptv-mcflow
+
+RUN cd STMCpp && make
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install -r /workspaces/4d-ptv-mcflow/requirements-docker.txt
+RUN if [ -d 4BE-ETI ] && [ -f 4BE-ETI/pyproject.toml ]; then /opt/venv/bin/pip install -e ./4BE-ETI; fi
+RUN if [ -d mcflow_plotting ] && [ -f mcflow_plotting/pyproject.toml ]; then /opt/venv/bin/pip install -e ./mcflow_plotting; fi
+RUN cd PTVcalib && /opt/venv/bin/pip install .
+RUN /opt/venv/bin/pip install .
+
+ENV PATH="/opt/venv/bin:$PATH"
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+
+ENTRYPOINT ["python3", "Processing Tools/run_stereo_matching_all_runs.py"]
+CMD ["--case", "TTI_opposing_gravity"]
