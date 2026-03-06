@@ -26,6 +26,9 @@ class Rays():
         self.XYZ = np.empty(self.ncameras, dtype=object)
         self.xyz0 = np.empty(self.ncameras, dtype=object)
         self.dd = np.empty(self.ncameras, dtype=object)
+        self.diameter = np.empty(self.ncameras, dtype=object)
+        self.intensity = np.empty(self.ncameras, dtype=object)
+        self.mass = np.empty(self.ncameras, dtype=object)
 
         self.load_centers()
 
@@ -39,18 +42,26 @@ class Rays():
                 os.path.join(folder, file))
 
     def process_camera(self, cam_idx: int = 0):
-        self.XYZ[cam_idx] = np.empty(
-            self.centers[cam_idx].shape[0], dtype=object)
-        self.xyz0[cam_idx] = np.empty(
-            self.centers[cam_idx].shape[0], dtype=object)
-        self.dd[cam_idx] = np.empty(
-            self.centers[cam_idx].shape[0], dtype=object)
-        for frame_idx, frame_xy in enumerate(self.centers[cam_idx]):
-            print(f'Frame {frame_idx} out of {len(self.centers[cam_idx])}')
+        n_frames = len(self.centers[cam_idx])
+        self.XYZ[cam_idx] = np.empty(n_frames, dtype=object)
+        self.xyz0[cam_idx] = np.empty(n_frames, dtype=object)
+        self.dd[cam_idx] = np.empty(n_frames, dtype=object)
+        self.diameter[cam_idx] = np.empty(n_frames, dtype=object)
+        self.intensity[cam_idx] = np.empty(n_frames, dtype=object)
+        self.mass[cam_idx] = np.empty(n_frames, dtype=object)
+        for frame_idx, frame_data in enumerate(self.centers[cam_idx]):
+            print(f'Frame {frame_idx} out of {n_frames}')
+            frame_xy = np.column_stack([frame_data['x'], frame_data['y']])
             self.XYZ[cam_idx][frame_idx] = self.calibration[cam_idx].transform_to_real_world(
                 frame_xy)
             self.xyz0[cam_idx][frame_idx], self.dd[cam_idx][frame_idx] = fit3dline(
                 self.XYZ[cam_idx][frame_idx])
+            n_rays = len(frame_data['x'])
+            for key, arr in (('diameter', self.diameter), ('intensity', self.intensity), ('mass', self.mass)):
+                if key in frame_data:
+                    arr[cam_idx][frame_idx] = np.asarray(frame_data[key], dtype=np.float64)
+                else:
+                    arr[cam_idx][frame_idx] = np.full(n_rays, np.nan, dtype=np.float64)
         return
 
     def compute_rays(self):
@@ -75,6 +86,10 @@ class Rays():
                     'xyz0': self.xyz0[cam][frame],
                     'dd': self.dd[cam][frame]
                 }
+                if self.diameter[cam][frame] is not None:
+                    data_cam[frame]['diameter'] = self.diameter[cam][frame]
+                    data_cam[frame]['intensity'] = self.intensity[cam][frame]
+                    data_cam[frame]['mass'] = self.mass[cam][frame]
             data[f'Camera {cam}'] = data_cam
         write_h5_multiple_camera(os.path.join(
             self.path + Filenames.RAYS.value), data, metadata)

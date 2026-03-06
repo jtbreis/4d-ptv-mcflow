@@ -31,10 +31,17 @@ class CenterFinding():
         self.frames = [self.frames[i] for i in kept_indices]
         self.frames_discarded = True
 
-    def find_centers(self, first_frame: int = 0, last_frame: int = -1):
+    def find_centers(self, first_frame: int = 0, last_frame: int = -1, processes: int | str = 1):
+        """Run trackpy batch detection. processes: number of worker processes, or 'auto' for cpu_count()."""
         frames = self.frames[first_frame:last_frame]
-        self.f = tp.batch(frames, self.particle_diameter,
-                          threshold=self.threshold, minmass=self.minmass, separation=self.separation)
+        self.f = tp.batch(
+            frames,
+            self.particle_diameter,
+            threshold=self.threshold,
+            minmass=self.minmass,
+            separation=self.separation,
+            processes=processes,
+        )
 
     def check_center_finding(self, nframe: int = 0, roi: list[int] = [100, 200, 100, 200], markersize=10):
         x_min, x_max = roi[0], roi[1]
@@ -90,7 +97,13 @@ class CenterFinding():
         plt.show()
 
     def write_matches(self):
-        grouped = self.f.groupby('frame')
+        df = self.f.copy()
+        # Add diameter (trackpy reports size = radius) and intensity (signal) for stereomatching
+        if 'size' in df.columns:
+            df['diameter'] = 2 * df['size']
+        if 'signal' in df.columns:
+            df['intensity'] = df['signal']
+        grouped = df.groupby('frame')
         data = {frame: group.reset_index(drop=True)
                 for frame, group in grouped}
         metadata = {'particle diameter': self.particle_diameter, 'threshold': self.threshold,

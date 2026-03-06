@@ -137,17 +137,17 @@ void do_STM(const std::string input_dir, const std::string filename, const unsig
     }
 
     if (save_hdf5) {
-        stm_file.set_last_frame(currentframe);
-        stm_file.~STM_File();
+        stm_file.set_last_frame(maxframes);
     }
 
     streamout.close();
-    
+
     std::clock_t tend = clock();
     double timing = double(tend - tstart) / CLOCKS_PER_SEC;
     std::cout << "\nElapsed time = " << timing << " sec\n";
-    timing /= currentframe-1;
-    std::cout << "\nElapsed time/frame = " << timing << " sec\n";
+    if (maxframes > 0) {
+        std::cout << "\nElapsed time/frame = " << (timing / maxframes) << " sec\n";
+    }
     
 }
 

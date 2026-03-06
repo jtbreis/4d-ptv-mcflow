@@ -37,6 +37,8 @@ def parse_args():
                    help='Minimum mass (default: 0).')
     p.add_argument('--separation', type=int, default=None,
                    help='Minimum separation between particles (default: particle_diameter/2).')
+    p.add_argument('--cores', type=str, default='1',
+                   help='Number of processes for trackpy batch (default 1). Use "auto" for all CPUs.')
     return p.parse_args()
 
 
@@ -72,7 +74,7 @@ def run_center_finding_for_run(raw_data_path, process_data_path, args):
         if args.separation is not None:
             cf.separation = args.separation
         cf.remove_frames()
-        cf.find_centers()
+        cf.find_centers(processes=args.cores)
         cf.write_matches()
         saved_path = os.path.abspath(cf.output_path)
         if os.path.isfile(saved_path):
@@ -83,8 +85,28 @@ def run_center_finding_for_run(raw_data_path, process_data_path, args):
         del cf
 
 
+def _parse_cores(cores_str):
+    """Return int (>=1) or 'auto' for trackpy processes."""
+    if cores_str.strip().lower() == 'auto':
+        return 'auto'
+    try:
+        n = int(cores_str)
+        if n < 1:
+            raise ValueError('--cores must be >= 1 or "auto"')
+        return n
+    except ValueError as e:
+        if 'invalid literal' in str(e).lower():
+            raise ValueError('--cores must be a positive integer or "auto"') from e
+        raise
+
+
 def main():
     args = parse_args()
+    try:
+        args.cores = _parse_cores(args.cores)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     raw_base = args.raw_data_base or os.path.join('raw_data', args.dataset, args.case)
     out_base = os.path.join(args.output_base, args.case) or os.path.join('data', 'PTV_center', args.case)
 
@@ -121,7 +143,7 @@ def main():
         if out_base_abs.startswith('/workspaces/') and 'data' in out_base.split(os.sep):
             print("  (In Docker: this path is under the data volume; files appear on the host at OUTPUT_DIR/PTV_center/...)")
     print(f"Center finding (all runs): case={args.case}, dataset={args.dataset}, runs={runs}")
-    print(f"  particle_diameter={args.particle_diameter}, threshold={args.threshold}, minmass={args.minmass}, separation={args.separation}")
+    print(f"  particle_diameter={args.particle_diameter}, threshold={args.threshold}, minmass={args.minmass}, separation={args.separation}, cores={args.cores}")
     print(f"  raw_base={raw_base}, output_base={out_base}")
 
     for run in runs:

@@ -9,7 +9,7 @@
 #   PARTICLE_DIAMETER=9 ./run_center_finding_all_runs.sh run
 #
 # Env: RAW_DATA_DIR, OUTPUT_DIR, CASE, DATASET, RUNS, RAW_DATA_BASE, OUTPUT_BASE,
-#      PARTICLE_DIAMETER, THRESHOLD, MINMASS, SEPARATION, DETACHED
+#      PARTICLE_DIAMETER, THRESHOLD, MINMASS, SEPARATION, N_CORES, DETACHED
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,7 +40,8 @@ run_container() {
     ${PARTICLE_DIAMETER:+--particle-diameter "$PARTICLE_DIAMETER"} \
     ${THRESHOLD:+--threshold "$THRESHOLD"} \
     ${MINMASS:+--minmass "$MINMASS"} \
-    ${SEPARATION:+--separation "$SEPARATION"}
+    ${SEPARATION:+--separation "$SEPARATION"} \
+    ${N_CORES:+--cores "$N_CORES"}
 }
 
 case "${1:-}" in
@@ -55,7 +56,7 @@ case "${1:-}" in
     echo "Usage: $0 {build|run} [--detached | -d]"
     echo "  build  Build center-finding (all runs) image"
     echo "  run    Run center finding for all runs"
-    echo "Env: RAW_DATA_DIR, OUTPUT_DIR, CASE, DATASET, RUNS, RAW_DATA_BASE, OUTPUT_BASE, PARTICLE_DIAMETER, THRESHOLD, MINMASS, SEPARATION, DETACHED"
+    echo "Env: RAW_DATA_DIR, OUTPUT_DIR, CASE, DATASET, RUNS, RAW_DATA_BASE, OUTPUT_BASE, PARTICLE_DIAMETER, THRESHOLD, MINMASS, SEPARATION, N_CORES, DETACHED"
     exit 1
     ;;
 esac
