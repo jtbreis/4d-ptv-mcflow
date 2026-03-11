@@ -50,6 +50,8 @@ def parse_args():
                    help='Write Paraview output (default: True).')
     p.add_argument('--no-write-paraview', action='store_false', dest='write_paraview',
                    help='Disable Paraview output.')
+    p.add_argument('--write-failed-tracks', action='store_true',
+                   help='Also write particles for which tracking failed (id=0, tracked=False).')
     return p.parse_args()
 
 
@@ -72,6 +74,7 @@ def run_tracking_for_run(process_data_path, args):
         box_size_x=args.box_size_x, box_size_y=args.box_size_y, box_size_z=args.box_size_z,
         box_size_track=args.box_size_track, dt=args.dt, rep_rate=args.rep_rate,
         write_paraview=args.write_paraview,
+        write_failed_tracks=args.write_failed_tracks,
     )
     tracking.run_tracking(workers=args.workers)
 

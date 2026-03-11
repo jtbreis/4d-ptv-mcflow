@@ -4,9 +4,9 @@ from python_4be_eti.utils.basic_utils import create_h5_file
 
 # directory containing the file with particle information (location, area, frame number)
 # you must include the full path to the directory here
-folder = '/workspaces/4d-ptv-mcflow/data/julian/PTV_center/TTI_opposing_gravity/Run4'
+folder = '/workspaces/4d-ptv-mcflow/data/tracking_test_threshold1'
 filename = 'rays_out_cpp.h5'
-run = 'run4'
+run = 'run1'
 
 create_h5_file(folder)
 
@@ -23,10 +23,11 @@ box_size_initial_z = 1
 # eliminate spurious track)
 box_size = 1
 # %%
+# Set write_failed_tracks=True to also write particles for which tracking failed (id=0, dataset 'tracked'=False per step)
 tracking = FourFrameTracking(folder, filename=filename, box_size_x=box_size_initial_x,
-                             box_size_y=box_size_initial_y, box_size_z=box_size_initial_z, box_size_track=box_size, dt=1e-3, rep_rate=10, write_paraview=True)
+                             box_size_y=box_size_initial_y, box_size_z=box_size_initial_z, box_size_track=box_size, dt=1e-3, rep_rate=10, write_paraview=True, write_failed_tracks=True)
 
 # %%
-tracking.run_tracking(20)
+tracking.run_tracking(1)
 
 # %%

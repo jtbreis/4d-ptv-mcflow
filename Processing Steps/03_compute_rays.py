@@ -6,7 +6,7 @@ from python_4dptv.matching.rays import Rays
 
 os.chdir('/workspaces/4d-ptv-mcflow')
 
-folder = '/workspaces/4d-ptv-mcflow/data/julian/PTV_center/TTI_aligned_with_gravity/Run1'
+folder = '/workspaces/4d-ptv-mcflow/data/tracking_test_threshold1'
 
 rays = Rays(folder)
 rays.compute_rays()

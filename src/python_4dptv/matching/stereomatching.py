@@ -67,6 +67,7 @@ def enrich_stereo_output_with_particle_props(path):
             grp = s[fk]
             xyze = grp["xyze"]
             n_matches = xyze.shape[1]
+            # camrayids: row 0 = camera 0, row 1 = ray id; row 2 = camera 1, row 3 = ray id; ...
             camrayids = grp["camrayids"][()]
             maxcams = camrayids.shape[0] // 2
 
