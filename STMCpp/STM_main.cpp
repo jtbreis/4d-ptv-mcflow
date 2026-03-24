@@ -162,7 +162,7 @@ int main(int argc, char **argv) {
     double maxdistance{0.2};
     double multiplematchesperraymindistance{0.0};
     unsigned int nx, ny, nz;
-    std::vector<int> bounding_box;
+    std::vector<double> bounding_box;
     struct boundingboxspec bb;
     bool print_config{false};
     bool hdf5{false};

@@ -133,12 +133,26 @@ class StereoMatching():
 
         env = os.environ.copy()
         env["OMP_NUM_THREADS"] = f'{nthreads}'
-        run_command = f'./STMCpp/STM -i {self.filename} -o {self.output} -f {self.frames} -c {self.mincameras} -d {self.maxdistance} -s {self.multiplematchesperraydistance} -m {self.maxmatchesperray} -x {self.nx} -y {self.ny} -z {self.nz} -b {self.minX} {self.maxX} {self.minY} {self.maxY} {self.minZ} {self.maxZ} --hdf5'
+        # argv list (do not str.split): paths/spaces safe; STM --bb expects six floats (CLI uses vector<double>)
+        cmd = [
+            './STMCpp/STM',
+            '-i', self.filename,
+            '-o', self.output,
+            '-f', str(self.frames),
+            '-c', str(self.mincameras),
+            '-d', str(self.maxdistance),
+            '-s', str(self.multiplematchesperraydistance),
+            '-m', str(self.maxmatchesperray),
+            '-x', str(self.nx),
+            '-y', str(self.ny),
+            '-z', str(self.nz),
+            '-b',
+            str(self.minX), str(self.maxX), str(self.minY), str(self.maxY), str(self.minZ), str(self.maxZ),
+            '--hdf5',
+        ]
 
-        # Launch the process
         proc = subprocess.Popen(
-            # replace with your command
-            run_command.split(),
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,           # automatically decode bytes to string
@@ -153,9 +167,16 @@ class StereoMatching():
         # Wait for the process to finish
         proc.wait()
         if proc.returncode != 0:
+            rc = proc.returncode
+            hint = "Check the output above for errors."
+            if rc == -9 or rc == 137:  # SIGKILL (137 = 128+9)
+                hint = (
+                    "Process was SIGKILL'd (-9): often the OOM killer (out of RAM). "
+                    "Try fewer OMP threads (--threads / N_THREADS), a smaller voxel grid (nvoxels), "
+                    "or run on a machine with more memory; see dmesg for 'Killed process' / 'oom-kill'."
+                )
             raise RuntimeError(
-                f"Stereo matching (STM) process exited with code {proc.returncode}. "
-                "Check the output above for errors."
+                f"Stereo matching (STM) process exited with code {rc}. {hint}"
             )
 
         # Carry diameter, intensity, mass from centers through to STM output
