@@ -23,6 +23,6 @@ void GenerateCamRayIDPermutations(std::vector<std::vector<camrayid>> Lists, std:
 std::vector<traversedcell> DirectionalVoxelTraversal(transformedray ray, std::vector<std::vector<double>> bounds);
 transformedray PrepareRay(ray r, boundingboxspec bb);
 candidatematch ClosestPointToLines(std::map<std::pair<int, int>,transformedray>& raydb, std::vector<camrayid> crids);
-std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& raydata, boundingboxspec bb, std::vector<std::vector<double>> bounds, int maxmatchesperray, unsigned int mincameras, double maxdistance, double multiplematchesperraymindistance);
+std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& raydata, boundingboxspec bb, std::vector<std::vector<double>> bounds, int maxmatchesperray, unsigned int mincameras, double maxdistance, double multiplematchesperraymindistance, STMFrameTiming* timing_out = nullptr);
 
 void init();

@@ -127,7 +127,7 @@ class StereoMatching():
             groups = list(f.keys())
             return len(f[groups[0]].keys())
 
-    def run_stereomatching(self, nthreads=8, nframes=None):
+    def run_stereomatching(self, nthreads=8, nframes=None, timing=False):
         if nframes is not None:
             self.frames = nframes
 
@@ -150,6 +150,8 @@ class StereoMatching():
             str(self.minX), str(self.maxX), str(self.minY), str(self.maxY), str(self.minZ), str(self.maxZ),
             '--hdf5',
         ]
+        if timing:
+            cmd.append('--timing')
 
         proc = subprocess.Popen(
             cmd,

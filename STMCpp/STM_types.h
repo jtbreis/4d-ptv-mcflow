@@ -87,4 +87,34 @@ struct hitpoint{
     double posz;
 };
 
+struct STMFrameTiming {
+    double import_rays_ms = 0;
+    double prepare_rays_ms = 0;
+    double voxel_traversal_ms = 0;
+    double sort_traversed_ms = 0;
+    double group_cells_ms = 0;
+    double candidate_pairs_ms = 0;
+    double permutations_dedup_ms = 0;
+    double closest_point_ms = 0;
+    double sort_candidate_matches_ms = 0;
+    double select_approved_ms = 0;
+    double write_output_ms = 0;
+    double matching_total_ms = 0;
+
+    void add(const STMFrameTiming& o) {
+        import_rays_ms += o.import_rays_ms;
+        prepare_rays_ms += o.prepare_rays_ms;
+        voxel_traversal_ms += o.voxel_traversal_ms;
+        sort_traversed_ms += o.sort_traversed_ms;
+        group_cells_ms += o.group_cells_ms;
+        candidate_pairs_ms += o.candidate_pairs_ms;
+        permutations_dedup_ms += o.permutations_dedup_ms;
+        closest_point_ms += o.closest_point_ms;
+        sort_candidate_matches_ms += o.sort_candidate_matches_ms;
+        select_approved_ms += o.select_approved_ms;
+        write_output_ms += o.write_output_ms;
+        matching_total_ms += o.matching_total_ms;
+    }
+};
+
 #endif

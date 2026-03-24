@@ -4,6 +4,7 @@
 //  Created by Sander Huisman on 10/05/2017.
 
 #include <algorithm>
+#include <chrono>
 #include <ctime>
 #include <iostream>
 #include <fstream>
@@ -16,6 +17,13 @@
 #include "STM_CMatrix.h"
 #include "STM_hdf5.h"
 #include "STM_helpers.h"
+
+namespace {
+using stm_clock = std::chrono::steady_clock;
+double stm_elapsed_ms(stm_clock::time_point t0) {
+    return std::chrono::duration<double, std::milli>(stm_clock::now() - t0).count();
+}
+}  // namespace
 
 // Global variables
 
@@ -473,13 +481,23 @@ candidatematch ClosestPointToLines(std::map<std::pair<int, int>,transformedray>&
     return(out);
 }
 
-std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& raydata, boundingboxspec bb, std::vector<std::vector<double>> bounds, int maxmatchesperray, unsigned int mincameras, double maxdistance, double multiplematchesperraymindistance)
+std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& raydata, boundingboxspec bb, std::vector<std::vector<double>> bounds, int maxmatchesperray, unsigned int mincameras, double maxdistance, double multiplematchesperraymindistance, STMFrameTiming* timing_out)
 {
+    const bool profile = (timing_out != nullptr);
+    stm_clock::time_point t_match0;
+    if (profile) {
+        t_match0 = stm_clock::now();
+    }
+
     //std::cout << "Bounding box: " << bb.xmin << " - " << bb.xmax << " :: "  << bb.ymin << " - " << bb.ymax << " :: " << bb.zmin << " - " << bb.zmax << "\n";
     //std::cout << "First: " << raydata[0].camid << "-" << raydata[0].rayid << "\n";
     //std::cout << "Last: " << raydata[raydata.size()-1].camid << "-" << raydata[raydata.size()-1].rayid << "\n";
     
     // Prepare the rays
+    stm_clock::time_point t0;
+    if (profile) {
+        t0 = stm_clock::now();
+    }
     std::map<std::pair<int, int>,transformedray> raydb;         // Store a dictionary of (cameraid, rayid): transformedray
     std::vector<transformedray> validrays;                      // Store the transformed rays
     std::map<int,int> numrays;                                  // Store the number of rays per camera
@@ -506,6 +524,9 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
                 invalidcounter[freshray.camid]++;
         }
     }
+    if (profile) {
+        timing_out->prepare_rays_ms += stm_elapsed_ms(t0);
+    }
     
     std::cout << "# of rays for each camera: {";
     for (auto kv = numrays.begin(); kv != numrays.end();) {
@@ -531,6 +552,9 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
 //        std::cout << "Camera " << kv.first << " has " << kv.second << " rays that miss the bounding box\n";
 //    }
     
+    if (profile) {
+        t0 = stm_clock::now();
+    }
     // Do the traversing
     std::vector<traversedcell> traversed;
     std::vector<traversedcell> tmptraverse;
@@ -554,14 +578,26 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
         //std::cout << tmptraverse.size() << " ";
         traversed.insert(traversed.end(), tmptraverse.begin(), tmptraverse.end());
     }
+    if (profile) {
+        timing_out->voxel_traversal_ms += stm_elapsed_ms(t0);
+    }
 //    for(auto i: traversed)
 //    {
 //            std::cout << i.camid << "." << i.rayid << "  " << i.cellid.xi << "," << i.cellid.yi << "," << i.cellid.xi << "\n";
 //    }
     
     std::cout << "# of voxels traversed after expansion: " << traversed.size() << "\n";
+    if (profile) {
+        t0 = stm_clock::now();
+    }
     std::sort(traversed.begin(),traversed.end(),comparetraversedcell);
+    if (profile) {
+        timing_out->sort_traversed_ms += stm_elapsed_ms(t0);
+    }
     
+    if (profile) {
+        t0 = stm_clock::now();
+    }
     std::vector<groupedcell> groupedcells;
     groupedcell tmpgroupedcell;
     tmpgroupedcell.camrayids.push_back({traversed[0].camid, traversed[0].rayid});
@@ -601,8 +637,14 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
             groupedcells.push_back(tmpgroupedcell);
         }
     }
+    if (profile) {
+        timing_out->group_cells_ms += stm_elapsed_ms(t0);
+    }
     std::cout << "Prune based on number of cameras: " << groupedcells.size() << "\n";
     
+    if (profile) {
+        t0 = stm_clock::now();
+    }
     // Get rid of cellID
     std::vector<std::vector<camrayid>> candidatepairs;
     std::vector<camrayid> tmpcamrayids;
@@ -617,7 +659,13 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
     candidatepairs.erase(std::unique(candidatepairs.begin(), candidatepairs.end(), comparecamrayidsidentical), candidatepairs.end());
     std::sort(candidatepairs.begin(),candidatepairs.end(),comparecamrayidsordered);         // Now sort followed by another unique…
     candidatepairs.erase(std::unique(candidatepairs.begin(), candidatepairs.end(), comparecamrayidsidentical), candidatepairs.end());
+    if (profile) {
+        timing_out->candidate_pairs_ms += stm_elapsed_ms(t0);
+    }
     
+    if (profile) {
+        t0 = stm_clock::now();
+    }
     std::vector<std::vector<camrayid>> candidates;
     for(std::vector<camrayid> cand: candidatepairs)
     {
@@ -650,6 +698,9 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
 
     std::sort(candidates.begin(),candidates.end(),comparecamrayidsordered);
     candidates.erase(std::unique(candidates.begin(), candidates.end(), comparecamrayidsidentical), candidates.end());
+    if (profile) {
+        timing_out->permutations_dedup_ms += stm_elapsed_ms(t0);
+    }
     
     std::cout << "Duplicate candidates removed: " << candidates.size() << "\n";
 //    for(auto i: candidates)
@@ -662,6 +713,9 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
 //        std::cout << "\n";
 //    }
     
+    if (profile) {
+        t0 = stm_clock::now();
+    }
     // Calculate match positions and errors for each of the candidates
     std::vector<candidatematch> candidatematches;
     for(auto cand: candidates)
@@ -670,8 +724,17 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
         tmp = ClosestPointToLines(raydb,cand);
         candidatematches.push_back(tmp);
     }
+    if (profile) {
+        timing_out->closest_point_ms += stm_elapsed_ms(t0);
+    }
     
+    if (profile) {
+        t0 = stm_clock::now();
+    }
     std::sort(candidatematches.begin(), candidatematches.end(), comparecandidatematches);
+    if (profile) {
+        timing_out->sort_candidate_matches_ms += stm_elapsed_ms(t0);
+    }
     
     
 //    for(auto i: candidatematches)
@@ -691,6 +754,9 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
 ////        std::cout << "\n";
 //    }
     
+    if (profile) {
+        t0 = stm_clock::now();
+    }
     // Select best matches from candidates
     std::cout << "Selecting the best matches with upto " << maxmatchesperray << " match(es)/ray out of " << candidates.size() <<" candidates\n";
     std::vector<candidatematch> approvedmatches;
@@ -761,6 +827,10 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
                 approvedmatches.push_back(cand);
             }
         }
+    }
+    if (profile) {
+        timing_out->select_approved_ms += stm_elapsed_ms(t0);
+        timing_out->matching_total_ms = stm_elapsed_ms(t_match0);
     }
     
     std::cout << "Selecting done. " << approvedmatches.size() << " matched found (out of " << candidates.size() << " candidates)\n";

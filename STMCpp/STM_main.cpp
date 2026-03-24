@@ -3,7 +3,11 @@
  *
  */
 
+#include <cerrno>
+#include <chrono>
 #include <ctime>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <vector>
 #include <map>
@@ -18,7 +22,105 @@
 
 #include "import_rays_h5.h"
 
-void do_STM(const std::string input_dir, const std::string filename, const unsigned int maxframes, const unsigned int mincameras, const double maxdistance, const double multiplematchesperraymindistance, const unsigned int maxmatchesperray, const struct boundingboxspec &bb, bool save_hdf5, bool save_bin, std::string output_dir) {
+namespace {
+double stm_elapsed_ms(std::chrono::steady_clock::time_point t0) {
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+}
+
+void print_stm_timing_mean(const STMFrameTiming& a, unsigned int nframes) {
+    if (nframes == 0) {
+        return;
+    }
+    const double n = static_cast<double>(nframes);
+    std::cout << "\n[STM --timing] mean ms per frame (steady_clock):\n";
+    std::cout << std::fixed << std::setprecision(3);
+    std::cout << "  import_rays:               " << a.import_rays_ms / n << "\n";
+    std::cout << "  prepare_rays:              " << a.prepare_rays_ms / n << "\n";
+    std::cout << "  voxel_traversal:           " << a.voxel_traversal_ms / n << "\n";
+    std::cout << "  sort_traversed:            " << a.sort_traversed_ms / n << "\n";
+    std::cout << "  group_cells:               " << a.group_cells_ms / n << "\n";
+    std::cout << "  candidate_pairs:           " << a.candidate_pairs_ms / n << "\n";
+    std::cout << "  permutations_dedup:        " << a.permutations_dedup_ms / n << "\n";
+    std::cout << "  closest_point:             " << a.closest_point_ms / n << "\n";
+    std::cout << "  sort_candidate_matches:    " << a.sort_candidate_matches_ms / n << "\n";
+    std::cout << "  select_approved:           " << a.select_approved_ms / n << "\n";
+    std::cout << "  write_output (bin+hdf5):   " << a.write_output_ms / n << "\n";
+    std::cout << "  matching_total (wall):     " << a.matching_total_ms / n << "\n";
+    std::cout << std::defaultfloat;
+}
+}  // namespace
+
+static void stm_process_one_frame(
+    int currentframe,
+    const std::string& inputfile,
+    const boundingboxspec& bb,
+    const std::vector<std::vector<double>>& bounds,
+    unsigned int maxmatchesperray,
+    unsigned int mincameras,
+    double maxdistance,
+    double multiplematchesperraymindistance,
+    bool save_bin,
+    bool save_hdf5,
+    std::ofstream& streamout,
+    STM_File& stm_file,
+    STMFrameTiming* frame_timing)
+{
+    H5::H5File rayfile(inputfile, H5F_ACC_RDONLY);
+
+    std::chrono::steady_clock::time_point t_imp;
+    if (frame_timing) {
+        t_imp = std::chrono::steady_clock::now();
+    }
+    auto rays = import_rays_h5(rayfile, currentframe);
+    if (frame_timing) {
+        frame_timing->import_rays_ms = stm_elapsed_ms(t_imp);
+    }
+
+    STMFrameTiming* match_timing = frame_timing;
+    auto results = SpaceTraversalMatching(rays, bb, bounds,
+                                          maxmatchesperray,
+                                          mincameras,
+                                          maxdistance,
+                                          multiplematchesperraymindistance,
+                                          match_timing);
+
+    std::chrono::steady_clock::time_point t_wr;
+    if (frame_timing) {
+        t_wr = std::chrono::steady_clock::now();
+    }
+    #pragma omp critical(binout)
+    if (save_bin) {
+        uint32_t numberofmatches = (uint32_t)results.size();
+        streamout.write((char*)&numberofmatches, sizeof(uint32_t));
+        for(auto &match : results) {
+            uint8_t numberofcams = (uint8_t)match.camrayids.size();
+            streamout.write((char*)&numberofcams, sizeof(uint8_t));
+            float val = match.matchx; streamout.write((char*)&val, sizeof(float));
+            val = match.matchy;       streamout.write((char*)&val, sizeof(float));
+            val = match.matchz;       streamout.write((char*)&val, sizeof(float));
+            val = match.matcherror;   streamout.write((char*)&val, sizeof(float));
+            for(auto &camrayid : match.camrayids) {
+                uint8_t camid = (uint8_t)camrayid.camid;
+                uint16_t rayid = (uint16_t)camrayid.rayid;
+                streamout.write((char*)&camid, sizeof(uint8_t));
+                streamout.write((char*)&rayid, sizeof(uint16_t));
+            }
+        }
+    }
+
+    #pragma omp critical(h5out)
+    if (save_hdf5) {
+        stm_file.write_matches(currentframe, results);
+        if (currentframe % 100 == 0) {
+            stm_file.flush();
+        }
+    }
+    if (frame_timing) {
+        frame_timing->write_output_ms = stm_elapsed_ms(t_wr);
+    }
+}
+
+void do_STM(const std::string input_dir, const std::string filename, const unsigned int maxframes, const unsigned int mincameras, const double maxdistance, const double multiplematchesperraymindistance, const unsigned int maxmatchesperray, const struct boundingboxspec &bb, bool save_hdf5, bool save_bin, std::string output_dir, bool enable_timing) {
     std::string inputfile = input_dir + '/' + filename;
     // Print parameters
     std::cout << "Input file: " << inputfile << std::endl;
@@ -88,50 +190,23 @@ void do_STM(const std::string input_dir, const std::string filename, const unsig
         std::cout << "HDF5 output file: " << outputh5file << std::endl;
     }
 
-    
+    STMFrameTiming timing_accum;
+    std::chrono::steady_clock::time_point frames_wall0;
+    if (enable_timing) {
+        frames_wall0 = std::chrono::steady_clock::now();
+    }
 
-    unsigned int currentframe = 0;
-    uint32_t numrays = 0;
-   
     #pragma omp parallel for schedule(dynamic)
     for (int currentframe = 0; currentframe < (int)maxframes; currentframe++) {
-
-
-        H5::H5File rayfile(inputfile, H5F_ACC_RDONLY);
-
-        auto rays = import_rays_h5(rayfile, currentframe);
-        auto results = SpaceTraversalMatching(rays, bb, bounds,
-                                              maxmatchesperray,
-                                              mincameras,
-                                              maxdistance,
-                                              multiplematchesperraymindistance);
-
-        // Writing must be serialized
-        #pragma omp critical(binout)
-        if (save_bin) {
-            uint32_t numberofmatches = (uint32_t)results.size();
-            streamout.write((char*)&numberofmatches, sizeof(uint32_t));
-            for(auto &match : results) {
-                uint8_t numberofcams = (uint8_t)match.camrayids.size();
-                streamout.write((char*)&numberofcams, sizeof(uint8_t));
-                float val = match.matchx; streamout.write((char*)&val, sizeof(float));
-                val = match.matchy;       streamout.write((char*)&val, sizeof(float));
-                val = match.matchz;       streamout.write((char*)&val, sizeof(float));
-                val = match.matcherror;   streamout.write((char*)&val, sizeof(float));
-                for(auto &camrayid : match.camrayids) {
-                    uint8_t camid = (uint8_t)camrayid.camid;
-                    uint16_t rayid = (uint16_t)camrayid.rayid;
-                    streamout.write((char*)&camid, sizeof(uint8_t));
-                    streamout.write((char*)&rayid, sizeof(uint16_t));
-                }
-            }
-        }
-
-        #pragma omp critical(h5out)
-        if (save_hdf5) {
-            stm_file.write_matches(currentframe, results);
-            if (currentframe % 100 == 0) {
-                stm_file.flush();
+        STMFrameTiming frame_tim;
+        STMFrameTiming* ft_ptr = enable_timing ? &frame_tim : nullptr;
+        stm_process_one_frame(currentframe, inputfile, bb, bounds,
+                                maxmatchesperray, mincameras, maxdistance, multiplematchesperraymindistance,
+                                save_bin, save_hdf5, streamout, stm_file, ft_ptr);
+        if (enable_timing) {
+            #pragma omp critical(stm_timing_merge)
+            {
+                timing_accum.add(frame_tim);
             }
         }
     }
@@ -141,6 +216,14 @@ void do_STM(const std::string input_dir, const std::string filename, const unsig
     }
 
     streamout.close();
+
+    if (enable_timing && maxframes > 0) {
+        double wall_s = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - frames_wall0).count();
+        std::cout << "\n[STM --timing] frame loop wall: " << wall_s << " s ("
+                  << (1000.0 * wall_s / static_cast<double>(maxframes)) << " ms/frame)\n";
+        print_stm_timing_mean(timing_accum, maxframes);
+    }
 
     std::clock_t tend = clock();
     double timing = double(tend - tstart) / CLOCKS_PER_SEC;
@@ -167,6 +250,7 @@ int main(int argc, char **argv) {
     bool print_config{false};
     bool hdf5{false};
     bool bin{false};
+    bool timing{false};
 
     app.add_option("-i,--input", input_file, "Input file")->check(CLI::ExistingFile)->required();
     app.add_option("-o,--output-dir", output_dir, "Output directory");
@@ -183,6 +267,7 @@ int main(int argc, char **argv) {
     app.add_flag("--print-config", print_config, "Prints an ini config to standard output, and returns.");
     app.add_flag("--hdf5", hdf5, "Save output in HDF5 file");
     app.add_flag("--bin", bin, "Save output in binary file");
+    app.add_flag("--timing", timing, "Print per-stage mean timing (ms/frame) at end of run");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -234,7 +319,7 @@ int main(int argc, char **argv) {
         filename = input_file;
     }
 
-    do_STM(input_dir, filename, maxframes, mincameras, maxdistance, multiplematchesperraymindistance, maxmatchesperray, bb, hdf5, bin, output_dir);
+    do_STM(input_dir, filename, maxframes, mincameras, maxdistance, multiplematchesperraymindistance, maxmatchesperray, bb, hdf5, bin, output_dir, timing);
 
     return EXIT_SUCCESS;
 }
