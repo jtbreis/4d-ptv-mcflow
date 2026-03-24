@@ -5,7 +5,7 @@ from python_4dptv.matching.stereomatching import StereoMatching
 # %autoreload 2
 
 os.chdir('/workspaces/4d-ptv-mcflow')
-folder = '/workspaces/4d-ptv-mcflow/data/tracking_test_threshold1'
+folder = '/workspaces/4d-ptv-mcflow/raw_data/low_threshold/PTV_center/TTI_aligned_with_gravity/Run2'
 # Set StereoMatching Parameters
 mincameras = 3
 maxdistance = 0.15
@@ -19,5 +19,5 @@ boundingbox = [-55, 55, -35, 35, -20, 20]
 # %% Run Stereomatching you need to run 'cd STMCpp && make' first / only once
 stereomatching = StereoMatching(folder, mincameras, maxdistance,
                                 multiplematchesperraydistance, maxmatchesperray, nvoxels, boundingbox)
-stereomatching.run_stereomatching(2, 12)
+stereomatching.run_stereomatching(nthreads=12, nframes=4)
 # stereomatching.plot_matches()

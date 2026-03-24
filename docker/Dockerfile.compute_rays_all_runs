@@ -1,6 +1,6 @@
-# Stereo matching only (STM) for all runs in a case; expects rays.h5 already present per run.
-# Runs: Processing Tools/run_stereo_matching_all_runs.py
-# Run after compute rays (and center finding). Does not require 4BE-ETI.
+# Ray computation only (all runs in a case).
+# Runs: Processing Tools/run_compute_rays_all_runs.py
+# Run after center finding. Same stack as stereo matching (PTVcalib, STMCpp).
 
 FROM ubuntu:24.04
 
@@ -24,5 +24,5 @@ RUN /opt/venv/bin/pip install .
 ENV PATH="/opt/venv/bin:$PATH"
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
-ENTRYPOINT ["python3", "Processing Tools/run_stereo_matching_all_runs.py"]
+ENTRYPOINT ["python3", "Processing Tools/run_compute_rays_all_runs.py"]
 CMD ["--case", "TTI_opposing_gravity"]

@@ -3,6 +3,7 @@ from python_4be_eti.utils.load_tracks import load_tracks
 
 import os
 import h5py
+import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
@@ -62,8 +63,8 @@ for i, tr in enumerate(all_tracks):
         'vmag_0': [tr.vmag[0]],
         'vmag_1': [tr.vmag[1]],
         'vmag_2': [tr.vmag[2]],
-        'vmean': [tr.vmean],
-        'vstd': [tr.vstd],
+        'vmean': [np.mean(tr.v, axis=0) if tr.v is not None and tr.v.size > 0 else np.array([np.nan, np.nan, np.nan])],
+        'vstd': [np.std(tr.v, axis=0) if tr.v is not None and tr.v.size > 0 else np.array([np.nan, np.nan, np.nan])],
         'ax_0': [tr.ax[0]],
         'ax_1': [tr.ax[1]],
         'ay_0': [tr.ay[0]],
@@ -72,8 +73,8 @@ for i, tr in enumerate(all_tracks):
         'az_1': [tr.az[1]],
         'amag_0': [tr.amag[0]],
         'amag_1': [tr.amag[1]],
-        'amean': [tr.amean],
-        'astd': [tr.astd],
+        'amean': [np.mean(tr.a, axis=0) if tr.a is not None and tr.a.size > 0 else np.array([np.nan, np.nan, np.nan])],
+        'astd': [np.std(tr.a, axis=0) if tr.a is not None and tr.a.size > 0 else np.array([np.nan, np.nan, np.nan])],
         'time': [tr.time]
     }))
 df = pd.concat(track_dicts, ignore_index=True)

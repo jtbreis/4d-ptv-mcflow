@@ -1,0 +1,18 @@
+# Compute rays (all runs) — one command per line.
+# Run from docker/: ./run_queue.sh [--jobs N] compute_rays_jobs.txt
+# Edit CASE, OUTPUT_BASE, and optional env per job. Lines starting with # are ignored.
+#
+# OUTPUT_BASE matches center finding: centers live under {OUTPUT_BASE}/{CASE}/Run*/Centers/
+# Optional env: RUNS, H5_FLUSH_EVERY (flush HDF5 every N frames per camera; default 1), N_WORKERS,
+#   IMAGE_NAME.
+
+# Add one command per line (uncomment and edit, or add your own):
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_aligned_with_gravity ./docker/run_compute_rays_all_runs.sh run
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_opposing_gravity ./docker/run_compute_rays_all_runs.sh run
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_no_gravity ./docker/run_compute_rays_all_runs.sh run
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=HIT ./docker/run_compute_rays_all_runs.sh run
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_below CASE=TTI_opposing_gravity ./docker/run_compute_rays_all_runs.sh run
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_below CASE=TTI_aligned_with_gravity ./docker/run_compute_rays_all_runs.sh run
+# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_above CASE=TTI_aligned_with_gravity ./docker/run_compute_rays_all_runs.sh run
+# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_above CASE=TTI_opposing_gravity ./docker/run_compute_rays_all_runs.sh run
+# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_above CASE=TTI_no_gravity ./docker/run_compute_rays_all_runs.sh run

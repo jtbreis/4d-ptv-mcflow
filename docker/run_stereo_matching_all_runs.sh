@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build and run the STEREO MATCHING container (all runs in a case).
-# Step 2 of 3: rays + stereo matching only. Run after center finding; then run tracking.
+# Step: stereo matching (STM) only; expects rays.h5 per run (from compute rays). Then run tracking.
 #
 # Usage:
 #   ./run_stereo_matching_all_runs.sh build
@@ -8,7 +8,7 @@
 #   CASE=TTI_no_gravity ./run_stereo_matching_all_runs.sh run
 #   MIN_CAMERAS=4 MAX_DISTANCE=0.15 ./run_stereo_matching_all_runs.sh run
 #
-# Env: OUTPUT_DIR, CASE, RUNS, OUTPUT_BASE,
+# Env: OUTPUT_DIR, CASE, RUNS, OUTPUT_BASE, N_THREADS,
 #      MIN_CAMERAS, MAX_DISTANCE, MULTIPLE_MATCHES_PER_RAY_DISTANCE, MAX_MATCHES_PER_RAY,
 #      NVOXELS, BOUNDING_BOX, DETACHED
 
@@ -25,19 +25,22 @@ build() {
 }
 
 run_container() {
-  echo "Running stereo matching (all runs)${CASE:+ case=$CASE}${DETACHED:+ (detached)}"
+  echo "Mounts: data (output) -> $OUTPUT_DIR"
+  echo "  Expects {OUTPUT_BASE:-data/PTV_center}/{case}/{run}/rays.h5 (run compute rays first)."
+  echo "Running stereo matching (all runs)${CASE:+ case=$CASE}${OUTPUT_BASE:+ output_base=$OUTPUT_BASE}${N_THREADS:+ threads=$N_THREADS}${DETACHED:+ (detached)}"
   docker run --rm ${DETACHED:+-d} \
     -v "$OUTPUT_DIR:/workspaces/4d-ptv-mcflow/data" \
     "$IMAGE_NAME" \
     ${CASE:+--case "$CASE"} \
     ${RUNS:+--runs "$RUNS"} \
     ${OUTPUT_BASE:+--output-base "$OUTPUT_BASE"} \
+    ${N_THREADS:+--threads "$N_THREADS"} \
     ${MIN_CAMERAS:+--min-cameras "$MIN_CAMERAS"} \
     ${MAX_DISTANCE:+--max-distance "$MAX_DISTANCE"} \
     ${MULTIPLE_MATCHES_PER_RAY_DISTANCE:+--multiple-matches-per-ray-distance "$MULTIPLE_MATCHES_PER_RAY_DISTANCE"} \
     ${MAX_MATCHES_PER_RAY:+--max-matches-per-ray "$MAX_MATCHES_PER_RAY"} \
     ${NVOXELS:+--nvoxels "$NVOXELS"} \
-    ${BOUNDING_BOX:+--bounding-box "$BOUNDING_BOX"}
+    ${BOUNDING_BOX:+--bounding-box="${BOUNDING_BOX}"}
 }
 
 case "${1:-}" in
@@ -52,7 +55,7 @@ case "${1:-}" in
     echo "Usage: $0 {build|run} [--detached | -d]"
     echo "  build  Build stereo-matching (all runs) image"
     echo "  run    Run stereo matching for all runs"
-    echo "Env: OUTPUT_DIR, CASE, RUNS, OUTPUT_BASE, MIN_CAMERAS, MAX_DISTANCE, MULTIPLE_MATCHES_PER_RAY_DISTANCE, MAX_MATCHES_PER_RAY, NVOXELS, BOUNDING_BOX, DETACHED"
+    echo "Env: OUTPUT_DIR, CASE, RUNS, OUTPUT_BASE, N_THREADS, MIN_CAMERAS, MAX_DISTANCE, MULTIPLE_MATCHES_PER_RAY_DISTANCE, MAX_MATCHES_PER_RAY, NVOXELS, BOUNDING_BOX, DETACHED"
     exit 1
     ;;
 esac

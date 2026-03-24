@@ -1,0 +1,39 @@
+# Grid sensitivity: initial box (x,y,z) × track box_size for 4-frame tracking.
+# Runs: Post-Processing/sensitivity_initial_and_track_box_size.py
+# Run after stereo matching (dataset must contain rays_out_cpp.h5).
+#
+# Single container: docker/run_sensitivity_initial_and_track.sh
+#
+# Split the grid across N parallel containers (same env on each; different SHARD):
+#   NUM_SHARDS=24 ./docker/run_sensitivity_initial_and_track_parallel.sh
+# Or manually: SHARD=0/24 ... run -d , SHARD=1/24 ... , ... (WORKERS=1 per container)
+# Each shard writes grid_manifest_shard_XX_of_NN.csv — merge on the host:
+#   python Post-Processing/sensitivity_initial_and_track_box_size.py --merge-manifests --output-dir <output-dir>
+
+FROM ubuntu:24.04
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 python3-venv python3-pip build-essential g++ libhdf5-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+COPY . /workspaces/4d-ptv-mcflow
+WORKDIR /workspaces/4d-ptv-mcflow
+
+RUN cd STMCpp && make
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install -r /workspaces/4d-ptv-mcflow/requirements-docker.txt
+RUN if [ -d 4BE-ETI ] && [ -f 4BE-ETI/pyproject.toml ]; then /opt/venv/bin/pip install -e ./4BE-ETI; fi
+RUN if [ -d mcflow_plotting ] && [ -f mcflow_plotting/pyproject.toml ]; then /opt/venv/bin/pip install -e ./mcflow_plotting; fi
+RUN cd PTVcalib && /opt/venv/bin/pip install .
+RUN /opt/venv/bin/pip install .
+
+ENV PATH="/opt/venv/bin:$PATH"
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+
+ENTRYPOINT ["python3", "Post-Processing/sensitivity_initial_and_track_box_size.py"]
+# Match 05_4frame_tracking.py: B-spline tracks + optional VTK export
+CMD ["--dataset", "/workspaces/4d-ptv-mcflow/data/tracking_test_threshold1", \
+     "--output-dir", "/workspaces/4d-ptv-mcflow/data/sensitivity_initial_and_track/tracking_test_threshold1", \
+     "--use-bspline", "--export-bspline-paraview"]
