@@ -13,8 +13,9 @@
 # Job file: one command per line. Lines starting with # and empty lines are skipped.
 # Commands are run from the repo root (parent of docker/), so use ./docker/script.sh or docker/script.sh.
 # Example: CASE=TTI_no_gravity DATASET=2025-09-11 ./docker/run_center_finding_all_runs.sh run
-# Example: OUTPUT_DIR=/data OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_no_gravity ./docker/run_compute_rays_all_runs.sh run
-# Example: OUTPUT_DIR=/data OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_no_gravity N_THREADS=16 ./docker/run_stereo_matching_all_runs.sh run
+# Example: OUTPUT_DIR=/data OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_no_gravity ./docker/compute_rays_all_runs/run_compute_rays_all_runs.sh run
+# Example: OUTPUT_DIR=/data OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_no_gravity N_THREADS=16 ./docker/stereo_matching_all_runs/run_stereo_matching_all_runs.sh run
+# Example: ... N_THREADS=16 SPATIAL_BOXES=16 SPATIAL_OVERLAP_CELLS=1 FRAME_PARALLELISM=2 TIMING=1 ./docker/stereo_matching_all_runs/run_stereo_matching_all_runs.sh run
 #
 # Monitoring: progress is printed as "Job N/T finished". With --detach, tail -f the log file.
 # To add timestamps set QUEUE_VERBOSE=1.

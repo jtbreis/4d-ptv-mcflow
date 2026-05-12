@@ -6,8 +6,8 @@ import os
 import numpy as np
 os.chdir('/workspaces/4d-ptv-mcflow')
 
-file_path = '/workspaces/4d-ptv-mcflow/raw_data/2025-09-11-ParticleTracking/TTI_aligned_with_gravity/Run1/Camera1.cine'
-output_path = 'data/tracking_test_threshold1'
+file_path = '/workspaces/4d-ptv-mcflow/raw_data/2025-11-13-ParticleTracking_AboveTTI/TTI_aligned_with_gravity/Run1/Camera4.cine'
+output_path = '/workspaces/4d-ptv-mcflow/raw_data/tracking_tests'
 
 # %%
 center_finding = CenterFinding(file_path, output_path, 7)
@@ -18,7 +18,7 @@ center_finding.remove_frames()  # only necessary for 4 frame tracking
 # print(center_finding.frames.pixel_type)
 # %%
 center_finding.particle_diameter = 7
-center_finding.threshold = 1
+center_finding.threshold = 2
 center_finding.separation = 3
 # center_finding.test_parameters(100)
 

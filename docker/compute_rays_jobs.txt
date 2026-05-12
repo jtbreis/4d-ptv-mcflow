@@ -5,14 +5,33 @@
 # OUTPUT_BASE matches center finding: centers live under {OUTPUT_BASE}/{CASE}/Run*/Centers/
 # Optional env: RUNS, H5_FLUSH_EVERY (flush HDF5 every N frames per camera; default 1), N_WORKERS,
 #   IMAGE_NAME.
+#
+# --- Optional per-camera center (x,y) remap (90° rotation before ray projection) ---
+# RAYS_CENTER_ROTATE — one token per camera in calib order (Camera 0, 1, …), comma-separated:
+#   cw | ccw | none   (same as python list: ['cw','ccw',None,'cw'])
+# Four cameras, cams 0–1 clockwise and 2–3 counter-clockwise:
+#   RAYS_CENTER_ROTATE=cw,cw,ccw,ccw
+# Shorthand for that pattern (four cameras only):
+#   RAYS_CENTER_ROTATE=pairwise
+# RAYS_IMAGE_WIDTH / RAYS_IMAGE_HEIGHT — original frame size in pixels before rotation.
+#   One number applies to every camera (typical if all sensors share resolution):
+#     RAYS_IMAGE_WIDTH=2048 RAYS_IMAGE_HEIGHT=2048
+#   Or comma-separated per camera if sizes differ (length must match number of cameras):
+#     RAYS_IMAGE_WIDTH=1600,1600,1920,1920 RAYS_IMAGE_HEIGHT=2560,2560,1200,1200
+# Whenever any camera rotates, width and height must be set (scalar or CSV for both axes).
+#
+# Full example:
+#   OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_below CASE=TTI_opposing_gravity \
+#     RAYS_CENTER_ROTATE=cw,cw,ccw,ccw RAYS_IMAGE_WIDTH=1600 RAYS_IMAGE_HEIGHT=2560 \
+#     ./docker/compute_rays_all_runs/run_compute_rays_all_runs.sh run
 
 # Add one command per line (uncomment and edit, or add your own):
-OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_aligned_with_gravity ./docker/run_compute_rays_all_runs.sh run
-OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_opposing_gravity ./docker/run_compute_rays_all_runs.sh run
-OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_no_gravity ./docker/run_compute_rays_all_runs.sh run
-OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=HIT ./docker/run_compute_rays_all_runs.sh run
-OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_below CASE=TTI_opposing_gravity ./docker/run_compute_rays_all_runs.sh run
-OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_below CASE=TTI_aligned_with_gravity ./docker/run_compute_rays_all_runs.sh run
-# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_above CASE=TTI_aligned_with_gravity ./docker/run_compute_rays_all_runs.sh run
-# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_above CASE=TTI_opposing_gravity ./docker/run_compute_rays_all_runs.sh run
-# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_above CASE=TTI_no_gravity ./docker/run_compute_rays_all_runs.sh run
+# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_aligned_with_gravity ./docker/compute_rays_all_runs/run_compute_rays_all_runs.sh run
+# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_opposing_gravity ./docker/compute_rays_all_runs/run_compute_rays_all_runs.sh run
+# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_no_gravity ./docker/compute_rays_all_runs/run_compute_rays_all_runs.sh run
+# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=HIT ./docker/compute_rays_all_runs/run_compute_rays_all_runs.sh run
+# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_below CASE=TTI_opposing_gravity RAYS_CENTER_ROTATE=cw,cw,ccw,ccw RAYS_IMAGE_WIDTH=2560 RAYS_IMAGE_HEIGHT=1600 ./docker/compute_rays_all_runs/run_compute_rays_all_runs.sh run
+# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_below CASE=TTI_aligned_with_gravity RAYS_CENTER_ROTATE=cw,cw,ccw,ccw RAYS_IMAGE_WIDTH=2560 RAYS_IMAGE_HEIGHT=1600 ./docker/compute_rays_all_runs/run_compute_rays_all_runs.sh run
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_above CASE=TTI_aligned_with_gravity RAYS_CENTER_ROTATE=cw,cw,ccw,ccw RAYS_IMAGE_WIDTH=2560 RAYS_IMAGE_HEIGHT=1600 ./docker/compute_rays_all_runs/run_compute_rays_all_runs.sh run
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_above CASE=TTI_opposing_gravity RAYS_CENTER_ROTATE=cw,cw,ccw,ccw RAYS_IMAGE_WIDTH=2560 RAYS_IMAGE_HEIGHT=1600 ./docker/compute_rays_all_runs/run_compute_rays_all_runs.sh run
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_above CASE=TTI_no_gravity RAYS_CENTER_ROTATE=cw,cw,ccw,ccw RAYS_IMAGE_WIDTH=2560 RAYS_IMAGE_HEIGHT=1600 ./docker/compute_rays_all_runs/run_compute_rays_all_runs.sh run

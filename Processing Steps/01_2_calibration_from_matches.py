@@ -18,18 +18,22 @@ def set_folder_readonly(path: str) -> None:
     """Set directory and all its contents to read-only (555)."""
     for dirpath, dirnames, filenames in os.walk(path, topdown=False):
         for name in filenames:
-            os.chmod(os.path.join(dirpath, name), stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        os.chmod(dirpath, stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            os.chmod(os.path.join(dirpath, name), stat.S_IRUSR | stat.S_IRGRP |
+                     stat.S_IROTH | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        os.chmod(dirpath, stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH |
+                 stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
 # %%
 # Match file sets: each entry is (path, n_cameras) — use first n_cameras from that file.
 # Number of cameras across sets must equal len(cameras).
-set_a = ('data/julian/PTV_below/Calibration/Matches/matches_cam1to2.h5', 2)  # path, use first 3 cameras
-set_b = ('data/julian/PTV_below/Calibration/Matches/matches_cam3to4.h5', 2)  # path, use first 1 camera
+# path, use first 3 cameras
+set_a = ('/workspaces/4d-ptv-mcflow/data/julian/PTV_above/Calibration/Matches/matches_cam1to2.h5', 2)
+# path, use first 1 camera
+set_b = ('/workspaces/4d-ptv-mcflow/data/julian/PTV_above/Calibration/Matches/matches_cam3to4.h5', 2)
 match_file_sets = [set_a, set_b]
 
-output_path = 'data/julian/PTV_below'
+output_path = '/workspaces/4d-ptv-mcflow/data/julian/PTV_above/Calibration'
 calibration_grid_path = 'PTVcalib/calibration_targets/TSI_5mm_backlight_nX39_nY39.csv'
 
 cameras = [1, 2, 3, 4]
@@ -41,7 +45,8 @@ target_point_diameter = 20
 
 # --- Which layers to use for calibration (optional) ---
 n_planes_to_use = None  # e.g. 21 to use that many evenly spaced planes
-layers_to_use = None    # e.g. [0, 5, 10, ...] to use exactly these layer indices (overrides n_planes_to_use)
+# e.g. [0, 5, 10, ...] to use exactly these layer indices (overrides n_planes_to_use)
+layers_to_use = None
 # If both are None, all layers from the match files are used.
 
 # Set Matches folder to read-only after writing (True/False)
@@ -72,7 +77,7 @@ for path, n_cameras in match_file_sets:
 matched_points = np.empty((n_cameras_total, n_planes_total), dtype=object)
 offset = 0
 for n_cams, part in parts:
-    matched_points[offset : offset + n_cams, :] = part
+    matched_points[offset: offset + n_cams, :] = part
     offset += n_cams
 
 # Select layer indices to use for calibration

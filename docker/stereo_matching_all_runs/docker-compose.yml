@@ -1,0 +1,15 @@
+# Build from repo root (Dockerfile COPY expects full tree).
+# Run: docker compose run --rm stereo_matching -- --case TTI_no_gravity
+# Detached: docker compose run -d --rm stereo_matching -- --case ...
+# Env for mounts: OUTPUT_DIR (default: repo data/ via ../../data from this file).
+
+services:
+  stereo_matching:
+    build:
+      context: ../..
+      dockerfile: docker/stereo_matching_all_runs/Dockerfile.stereo_matching_all_runs
+    image: ${IMAGE_NAME:-4d-ptv-stereo-matching-all-runs}
+    volumes:
+      - type: bind
+        source: ${OUTPUT_DIR:-../../data}
+        target: /workspaces/4d-ptv-mcflow/data

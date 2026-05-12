@@ -34,8 +34,8 @@ test: $(LOG)
 STM_info: STM_info.o STM_hdf5.o
 	$(CXX) -o STM_info $(CXXFLAGS) STM_info.o STM_hdf5.o
 
-STM: STM.o STM_hdf5.o STM_main.o STM_CMatrix.o STM_helpers.o import_rays_h5.o
-	$(CXX) -o STM $(CXXFLAGS) STM.o STM_hdf5.o STM_main.o STM_CMatrix.o STM_helpers.o import_rays_h5.o
+STM: STM.o STM_hdf5.o STM_main.o STM_CMatrix.o STM_helpers.o import_rays_h5.o STM_spatial_boxes.o
+	$(CXX) -o STM $(CXXFLAGS) STM.o STM_hdf5.o STM_main.o STM_CMatrix.o STM_helpers.o import_rays_h5.o STM_spatial_boxes.o
 
 clean:
 	rm -f STM STM_info $(OBJECTS)

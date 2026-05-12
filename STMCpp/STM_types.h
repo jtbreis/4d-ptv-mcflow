@@ -6,6 +6,7 @@
 #ifndef STM_HEADER_H
 #define STM_HEADER_H
 
+#include <algorithm>
 #include <vector>
 
 struct cellvisit{
@@ -115,6 +116,18 @@ struct STMFrameTiming {
         write_output_ms += o.write_output_ms;
         matching_total_ms += o.matching_total_ms;
     }
+
+    // Spatial sub-volumes run in parallel; take max per stage (approx. critical-path time), not sum.
+    void merge_max_parallel_box_stages(const STMFrameTiming& o) {
+        prepare_rays_ms = std::max(prepare_rays_ms, o.prepare_rays_ms);
+        voxel_traversal_ms = std::max(voxel_traversal_ms, o.voxel_traversal_ms);
+        sort_traversed_ms = std::max(sort_traversed_ms, o.sort_traversed_ms);
+        group_cells_ms = std::max(group_cells_ms, o.group_cells_ms);
+        candidate_pairs_ms = std::max(candidate_pairs_ms, o.candidate_pairs_ms);
+        permutations_dedup_ms = std::max(permutations_dedup_ms, o.permutations_dedup_ms);
+        closest_point_ms = std::max(closest_point_ms, o.closest_point_ms);
+        sort_candidate_matches_ms = std::max(sort_candidate_matches_ms, o.sort_candidate_matches_ms);
+   }
 };
 
 #endif

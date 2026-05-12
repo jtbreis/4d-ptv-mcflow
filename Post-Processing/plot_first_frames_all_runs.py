@@ -42,6 +42,7 @@ def discover_run_folders(raw_data_root):
             if not _is_run_dir(d):
                 continue
             run_path = os.path.join(dirpath, d)
+
             def _camera_sort(p):
                 m = re.search(r'Camera(\d+)', os.path.basename(p), re.I)
                 return (int(m.group(1)), p) if m else (0, p)
@@ -61,7 +62,8 @@ def load_cine_frames(cine_path, frame_indices):
     try:
         import pims
     except ImportError:
-        raise ImportError('pims is required to read .cine files: pip install pims imageio-ffmpeg')
+        raise ImportError(
+            'pims is required to read .cine files: pip install pims imageio-ffmpeg')
     vid = pims.open(cine_path)
     n = len(vid)
     out = []
@@ -87,14 +89,16 @@ def plot_and_save_first_frames(cine_path, max_frames=5, figsize_per_frame=(3, 2.
         return
 
     n = len(frames)
-    fig, axes = plt.subplots(1, n, figsize=(figsize_per_frame[0] * n, figsize_per_frame[1]), squeeze=False)
+    fig, axes = plt.subplots(1, n, figsize=(
+        figsize_per_frame[0] * n, figsize_per_frame[1]), squeeze=False)
     axes = axes[0]
     for i, (ax, img) in enumerate(zip(axes, frames)):
-        ax.imshow(img, cmap='gray')
+        ax.imshow(img, cmap='gray', vmin=0, vmax=100)
         ax.set_title(f'Frame {i}')
         ax.axis('off')
+
     plt.tight_layout()
-    plt.savefig(out_path, dpi=120, bbox_inches='tight')
+    plt.savefig(out_path, dpi=320, bbox_inches='tight')
     plt.close()
     print(f"  Saved {out_path}")
 
@@ -124,7 +128,8 @@ def main():
 
     run_folders = discover_run_folders(raw_root)
     if not run_folders:
-        print(f"No run folders with .cine files found under {raw_root}", file=sys.stderr)
+        print(
+            f"No run folders with .cine files found under {raw_root}", file=sys.stderr)
         sys.exit(0)
 
     print(f"Found {len(run_folders)} run folder(s) under {raw_root}")
@@ -132,7 +137,8 @@ def main():
         print(f"Run: {run_path} ({len(cines)} cine file(s))")
         for cine_path in cines:
             try:
-                plot_and_save_first_frames(cine_path, max_frames=args.max_frames)
+                plot_and_save_first_frames(
+                    cine_path, max_frames=args.max_frames)
             except Exception as e:
                 print(f"  Error processing {cine_path}: {e}", file=sys.stderr)
     print("Done.")

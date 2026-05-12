@@ -39,6 +39,14 @@ def parse_args():
                    help='Bounding box [minX,maxX,minY,maxY,minZ,maxZ] comma-separated.')
     p.add_argument('--threads', type=int, default=12,
                    help='Thread count for the STM binary (OMP_NUM_THREADS; default: 12).')
+    p.add_argument('--timing', action='store_true',
+                   help='Pass --timing to STM (per-stage ms/frame at end of run).')
+    p.add_argument('--spatial-boxes', type=int, default=0, dest='spatial_boxes',
+                   help='STM --spatial-boxes: sub-volume count (0 = single full volume, default).')
+    p.add_argument('--spatial-overlap', type=int, default=1, dest='spatial_overlap_cells',
+                   help='STM --spatial-overlap: halo in global voxels per face (default: 1).')
+    p.add_argument('--frame-parallelism', type=int, default=0, dest='frame_parallelism',
+                   help='STM --frame-parallelism: max frames processed concurrently (0 = use OMP_NUM_THREADS).')
     return p.parse_args()
 
 
@@ -90,7 +98,13 @@ def run_stereo_matching_for_run(process_data_path, args):
         args.multiple_matches_per_ray_distance, args.max_matches_per_ray,
         nvoxels, boundingbox,
     )
-    sm.run_stereomatching(nthreads=args.threads)
+    sm.run_stereomatching(
+        nthreads=args.threads,
+        timing=args.timing,
+        spatial_boxes=args.spatial_boxes,
+        spatial_overlap_cells=args.spatial_overlap_cells,
+        frame_parallelism=args.frame_parallelism,
+    )
     return True
 
 
@@ -120,6 +134,10 @@ def main():
     print(
         f"  threads={args.threads}, min_cameras={args.min_cameras}, max_distance={args.max_distance}, "
         f"nvoxels={args.nvoxels}, bounding_box={args.bounding_box}",
+    )
+    print(
+        f"  spatial_boxes={args.spatial_boxes}, spatial_overlap_cells={args.spatial_overlap_cells}, "
+        f"frame_parallelism={args.frame_parallelism}, timing={args.timing}",
     )
     print(f"  output_base={out_base}")
 

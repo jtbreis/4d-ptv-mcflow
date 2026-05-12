@@ -1,5 +1,6 @@
 # Stereo matching only (STM) for all runs in a case; expects rays.h5 already present per run.
 # Runs: Processing Tools/run_stereo_matching_all_runs.py
+# Args/env are forwarded via docker/stereo_matching_all_runs/run_stereo_matching_all_runs.sh (TIMING, SPATIAL_BOXES, SPATIAL_OVERLAP_CELLS, FRAME_PARALLELISM, etc.).
 # Run after compute rays (and center finding). Does not require 4BE-ETI.
 
 FROM ubuntu:24.04

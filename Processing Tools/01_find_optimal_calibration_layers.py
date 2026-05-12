@@ -20,24 +20,24 @@ os.chdir('/workspaces/4d-ptv-mcflow')
 # %%
 # --- Configuration ---
 # Path to existing matches file (e.g. from 01_2 or after running calibration pipeline)
-matches_path = 'data/julian/PTV_center/Calibration_Before/Matches/matches.h5'
-output_path = 'data/julian/PTV_center'
+matches_path = '/workspaces/4d-ptv-mcflow/data/julian/PTV_above/Calibration_After_New/Matches/matches.h5'
+output_path = 'data/julian/PTV_above'
 calibration_grid_path = 'PTVcalib/calibration_targets/TSI_5mm_backlight_nX39_nY39.csv'
 
 cameras = [1, 2, 3, 4]
 calibration_method = '4d-ptv'
 grid_spacing = 5.0  # mm
-z_min = -20  # mm
-z_max = 20  # mm
+z_min = -25  # mm
+z_max = 25  # mm
 target_point_diameter = 20
 
 # StereoMatching parameters (used for ray intersection)
 mincameras = 3
-maxdistance = 0.2
-multiplematchesperraydistance = 1
-maxmatchesperray = 2
-nvoxels = [600, 800, 500]
-boundingbox = [-50, 50, -30, 30, -20, 20]
+maxdistance = 0.15
+multiplematchesperraydistance = 0.5
+maxmatchesperray = 4
+nvoxels = [350, 550, 200]
+boundingbox = [-30, 30, -50, 50, -20, 20]
 
 # Range of number of layers to test
 min_layers = 3
@@ -71,10 +71,12 @@ print(f"Wrote Centers ({n_planes_total} layers) to {centers_camera_dir}")
 if n_layers_to_try is not None:
     n_layers_list = [k for k in n_layers_to_try if 1 <= k <= n_planes_total]
 else:
-    max_n = min(n_planes_total, max_layers) if max_layers is not None else n_planes_total // 2
+    max_n = min(n_planes_total,
+                max_layers) if max_layers is not None else n_planes_total // 2
     n_layers_list = list(range(min_layers, max_n + 1))
 if not n_layers_list:
-    raise ValueError("No layer counts to try. Check min_layers, max_layers, n_layers_to_try.")
+    raise ValueError(
+        "No layer counts to try. Check min_layers, max_layers, n_layers_to_try.")
 
 print(f"Testing n_layers: {n_layers_list}")
 
@@ -120,7 +122,8 @@ for n_layers in n_layers_list:
     )
     errors_cal.append(err_cal)
     errors_in_between.append(err_in_between)
-    print(f"  n_layers={n_layers} -> stereo error on cal layers = {err_cal:.4f} mm, on in-between = {err_in_between:.4f} mm")
+    print(
+        f"  n_layers={n_layers} -> stereo error on cal layers = {err_cal:.4f} mm, on in-between = {err_in_between:.4f} mm")
 
 errors_cal = np.array(errors_cal)
 errors_in_between = np.array(errors_in_between)
@@ -143,7 +146,8 @@ ax.axvline(n_layers_list[idx_min], color='#e94f37', linestyle='--', alpha=0.7,
 ax.legend()
 
 if plot_save_path:
-    save_path = plot_save_path if os.path.isabs(plot_save_path) else os.path.join(output_path, plot_save_path)
+    save_path = plot_save_path if os.path.isabs(
+        plot_save_path) else os.path.join(output_path, plot_save_path)
     os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
     plt.savefig(save_path)
     print(f"Plot saved to {save_path}")
@@ -162,7 +166,8 @@ print(f"Optimal number of layers (lowest error on in-between): {optimal_n_layers
       f"(in-between = {errors_in_between[idx_min]:.4f} mm, cal layers = {errors_cal[idx_min]:.4f} mm)")
 
 # Re-run calibration for optimal n_layers and write to calib.h5
-layer_indices_opt = np.linspace(0, n_planes_total - 1, optimal_n_layers, dtype=int)
+layer_indices_opt = np.linspace(
+    0, n_planes_total - 1, optimal_n_layers, dtype=int)
 mp_opt = matched_points_full[:, layer_indices_opt]
 z_planes_opt = full_z_planes[layer_indices_opt]
 cal_opt = Calibration(

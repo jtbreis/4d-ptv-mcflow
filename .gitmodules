@@ -7,3 +7,6 @@
 [submodule "mcflow_plotting"]
 	path = mcflow_plotting
 	url = git@github.com:jtbreis/mcflow-plotting.git
+[submodule "ptv_weblauncher"]
+	path = ptv_weblauncher
+	url = git@github.com:jtbreis/ptv_weblauncher.git

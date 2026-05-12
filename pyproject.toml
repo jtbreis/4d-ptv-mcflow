@@ -7,4 +7,4 @@ name = "4Dptv_python"
 version = "0.1.0"
 description = "Python package implementation from the 4D-PTV algorithm for particle tracking velocimetry."
 authors = [{name="Julian Reis", email="jreis25@uw.edu"}]
-dependencies = ["numpy", "trackpy", "pims", "matplotlib", "jinja2"]
+dependencies = ["numpy", "scipy", "trackpy", "pims", "matplotlib", "jinja2", "tqdm"]

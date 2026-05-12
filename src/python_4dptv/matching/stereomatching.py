@@ -127,7 +127,24 @@ class StereoMatching():
             groups = list(f.keys())
             return len(f[groups[0]].keys())
 
-    def run_stereomatching(self, nthreads=8, nframes=None, timing=False):
+    def run_stereomatching(
+        self,
+        nthreads=8,
+        nframes=None,
+        timing=False,
+        spatial_boxes=0,
+        spatial_overlap_cells=1,
+        frame_parallelism=0,
+    ):
+        """Run the C++ STM binary.
+
+        ``spatial_boxes`` sets ``--spatial-boxes`` (sub-volume count; 0 = single full volume).
+        ``spatial_overlap_cells`` sets ``--spatial-overlap`` (halo in global voxels per face; default 1).
+        Use ``OMP_NUM_THREADS`` >= ``spatial_boxes`` if you want all boxes to run in parallel.
+
+        ``frame_parallelism`` sets ``--frame-parallelism`` (max frames processed at once; 0 = use
+        ``OMP_NUM_THREADS`` for the outer frame loop, same as not passing the flag).
+        """
         if nframes is not None:
             self.frames = nframes
 
@@ -152,6 +169,11 @@ class StereoMatching():
         ]
         if timing:
             cmd.append('--timing')
+        if spatial_boxes and int(spatial_boxes) > 0:
+            cmd.extend(['--spatial-boxes', str(int(spatial_boxes))])
+            cmd.extend(['--spatial-overlap', str(int(spatial_overlap_cells))])
+        if frame_parallelism and int(frame_parallelism) > 0:
+            cmd.extend(['--frame-parallelism', str(int(frame_parallelism))])
 
         proc = subprocess.Popen(
             cmd,

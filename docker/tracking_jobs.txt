@@ -1,0 +1,23 @@
+# Tracking (4-frame, all runs) — one command per line.
+# Run from docker/: ./run_queue.sh [--jobs N] tracking_jobs.txt
+# Requires rays_out_cpp.h5 per run (stereo matching already done).
+# Edit OUTPUT_DIR, OUTPUT_BASE, CASE, and optional env per job. Lines starting with # are ignored.
+#
+# Optional env:
+#   RUNS, RAYS_FILENAME, BOX_SIZE_X, BOX_SIZE_INITIAL_X_LO, BOX_SIZE_INITIAL_X_HI,
+#   BOX_SIZE_Y, BOX_SIZE_Z, BOX_SIZE_TRACK,
+#   DT, REP_RATE, WORKERS, MAX_FRAME_RANGES, POSITION_UNIT,
+#   NO_WRITE_PARAVIEW=1, WRITE_FAILED_TRACKS=1
+#
+# Example defaults used in scripts:
+#   RAYS_FILENAME=rays_out_cpp.h5, DT=1e-3, REP_RATE=10, POSITION_UNIT=mm
+
+# Add one command per line (uncomment and edit, or add your own):
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_above CASE=TTI_aligned_with_gravity RUNS='Run1' WORKERS=64 BOX_SIZE_X=3.5 BOX_SIZE_INITIAL_X_LO=-1.0 BOX_SIZE_INITIAL_X_HI=3.5 BOX_SIZE_Y=1.5 BOX_SIZE_Z=1.5 BOX_SIZE_TRACK=0.15 DT=1e-3 REP_RATE=10 POSITION_UNIT=mm ./docker/tracking_all_runs/run_tracking_all_runs.sh run
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_above CASE=TTI_opposing_gravity RUNS='Run1' WORKERS=64 BOX_SIZE_X=3.5 BOX_SIZE_INITIAL_X_LO=-1.0 BOX_SIZE_INITIAL_X_HI=3.5 BOX_SIZE_Y=1.5 BOX_SIZE_Z=1.5 BOX_SIZE_TRACK=0.15 DT=1e-3 REP_RATE=10 POSITION_UNIT=mm ./docker/tracking_all_runs/run_tracking_all_runs.sh run
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_above CASE=TTI_no_gravity RUNS='Run1' WORKERS=64 BOX_SIZE_X=3.5 BOX_SIZE_INITIAL_X_LO=-1.0 BOX_SIZE_INITIAL_X_HI=3.5 BOX_SIZE_Y=1.5 BOX_SIZE_Z=1.5 BOX_SIZE_TRACK=0.15 DT=1e-3 REP_RATE=10 POSITION_UNIT=mm ./docker/tracking_all_runs/run_tracking_all_runs.sh run
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_below CASE=TTI_aligned_with_gravity RUNS='Run1' WORKERS=64 BOX_SIZE_X=3.5 BOX_SIZE_INITIAL_X_LO=-1.0 BOX_SIZE_INITIAL_X_HI=3.5 BOX_SIZE_Y=1.5 BOX_SIZE_Z=1.5 BOX_SIZE_TRACK=0.15 DT=1e-3 REP_RATE=10 POSITION_UNIT=mm ./docker/tracking_all_runs/run_tracking_all_runs.sh run
+OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_below CASE=TTI_opposing_gravity RUNS='Run1' WORKERS=64 BOX_SIZE_X=3.5 BOX_SIZE_INITIAL_X_LO=-1.0 BOX_SIZE_INITIAL_X_HI=3.5 BOX_SIZE_Y=1.5 BOX_SIZE_Z=1.5 BOX_SIZE_TRACK=0.15 DT=1e-3 REP_RATE=10 POSITION_UNIT=mm ./docker/tracking_all_runs/run_tracking_all_runs.sh run
+
+# Fast smoke test (first N frame ranges only):
+# OUTPUT_DIR=/mnt/raid OUTPUT_BASE=data/low_threshold/PTV_center CASE=TTI_aligned_with_gravity RUNS='Run1' WORKERS=4 MAX_FRAME_RANGES=3 POSITION_UNIT=mm ./docker/tracking_all_runs/run_tracking_all_runs.sh run

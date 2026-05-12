@@ -193,9 +193,11 @@ def _step_frame_num(key: str) -> int:
 
 def load_tracks_raw(filepath: str):
     """
-    Load from h5part into: step_keys (sorted), tracks_raw, has_props.
+    Load from h5part into: step_keys (sorted), tracks_raw, has_props, props_ncams.
 
-    tracks_raw: dict track_id -> list of (frame, x, y, z [, d, i, m])
+    tracks_raw: dict track_id -> list of (frame, x, y, z [, d, i, m]) where d,i,m
+    are scalars (legacy) or 1d arrays of length n_cams (per-ray from stereomatching).
+    props_ncams: 0 if not has_props, else number of cameras per particle (1 = scalar).
     """
     with h5py.File(filepath, "r") as f:
         step_keys = [k for k in f.keys() if k.startswith("Step#")]
@@ -203,6 +205,7 @@ def load_tracks_raw(filepath: str):
             raise ValueError("No Step# groups in %s" % filepath)
         step_keys.sort(key=_step_frame_num)
         has_props = "diameter" in f[step_keys[0]]
+        props_ncams = 0
 
         tracks_raw = {}
         for key in step_keys:
@@ -213,21 +216,41 @@ def load_tracks_raw(filepath: str):
             z = np.asarray(grp["z"]).ravel()
             id_ = np.asarray(grp["id"]).ravel().astype(int)
             if has_props:
-                d = np.asarray(grp["diameter"]).ravel()
-                intensity = np.asarray(grp["intensity"]).ravel()
-                m = np.asarray(grp["mass"]).ravel()
+                d = np.asarray(grp["diameter"])
+                intensity = np.asarray(grp["intensity"])
+                m = np.asarray(grp["mass"])
+                if d.ndim == 2 and d.shape[1] > 0:
+                    props_ncams = max(props_ncams, d.shape[1])
+                elif d.ndim == 1 and d.size > 0:
+                    props_ncams = max(props_ncams, 1)
+                props_2d = d.ndim == 2
             for i in range(len(id_)):
                 tid = id_[i]
                 if tid not in tracks_raw:
                     tracks_raw[tid] = []
                 if has_props:
-                    tracks_raw[tid].append(
-                        (frame, x[i], y[i], z[i], d[i], intensity[i], m[i]))
+                    if props_2d:
+                        tracks_raw[tid].append((
+                            frame, x[i], y[i], z[i],
+                            np.asarray(d[i], dtype=np.float64).ravel(),
+                            np.asarray(intensity[i], dtype=np.float64).ravel(),
+                            np.asarray(m[i], dtype=np.float64).ravel(),
+                        ))
+                    else:
+                        tracks_raw[tid].append((
+                            frame, x[i], y[i], z[i],
+                            float(d.ravel()[i]),
+                            float(intensity.ravel()[i]),
+                            float(m.ravel()[i]),
+                        ))
                 else:
                     tracks_raw[tid].append(
                         (frame, x[i], y[i], z[i], np.nan, np.nan, np.nan))
 
-    return step_keys, tracks_raw, has_props
+        if has_props and props_ncams == 0:
+            props_ncams = 1
+
+    return step_keys, tracks_raw, has_props, props_ncams
 
 
 def get_four_frame_blocks(step_keys):
@@ -266,9 +289,9 @@ def build_block_tracks(tracks_raw, block_frames, dt=1.0):
         x_arr = np.array([p[1] for p in points_block], dtype=np.float64)
         y_arr = np.array([p[2] for p in points_block], dtype=np.float64)
         z_arr = np.array([p[3] for p in points_block], dtype=np.float64)
-        d = np.array([p[4] for p in points_block])
-        i = np.array([p[5] for p in points_block])
-        m = np.array([p[6] for p in points_block])
+        d = np.stack([np.atleast_1d(p[4]) for p in points_block])
+        i = np.stack([np.atleast_1d(p[5]) for p in points_block])
+        m = np.stack([np.atleast_1d(p[6]) for p in points_block])
 
         t = frames_arr.astype(np.float64) * dt
         try:
@@ -302,7 +325,7 @@ def run(
     out_curves_h5 = os.path.join(output_dir, stem + "_bspline_curves.h5")
     out_curves_xmf = os.path.join(output_dir, stem + "_bspline_curves.xmf")
 
-    step_keys, tracks_raw, has_props = load_tracks_raw(filepath)
+    step_keys, tracks_raw, has_props, props_ncams = load_tracks_raw(filepath)
     blocks = get_four_frame_blocks(step_keys)
     if not blocks:
         # Single block: use all frames if they form one contiguous 4-frame set
@@ -361,9 +384,9 @@ def run(
                         float(ax[idx]),
                         float(ay[idx]),
                         float(az[idx]),
-                        float(d[idx]),
-                        float(i[idx]),
-                        float(m[idx]),
+                        np.asarray(d[idx], dtype=np.float64).ravel(),
+                        np.asarray(i[idx], dtype=np.float64).ravel(),
+                        np.asarray(m[idx], dtype=np.float64).ravel(),
                     )
                 )
             # B-spline curve for this 4-frame track
@@ -404,12 +427,29 @@ def run(
                     grp.create_dataset(
                         "az", data=np.array([], dtype=np.float64))
                     if has_props:
-                        grp.create_dataset(
-                            "diameter", data=np.array([], dtype=np.float64))
-                        grp.create_dataset(
-                            "intensity", data=np.array([], dtype=np.float64))
-                        grp.create_dataset(
-                            "mass", data=np.array([], dtype=np.float64))
+                        if props_ncams > 1:
+                            z = np.zeros((0, props_ncams), dtype=np.float64)
+                            grp.create_dataset("diameter", data=z)
+                            grp.create_dataset("intensity", data=z.copy())
+                            grp.create_dataset("mass", data=z.copy())
+                            for c in range(props_ncams):
+                                grp.create_dataset(
+                                    f"intensity_{c}", data=np.array([], dtype=np.float64)
+                                )
+                                grp.create_dataset(
+                                    f"mass_{c}", data=np.array([], dtype=np.float64)
+                                )
+                        else:
+                            grp.create_dataset(
+                                "diameter", data=np.array([], dtype=np.float64))
+                            grp.create_dataset(
+                                "intensity", data=np.array([], dtype=np.float64))
+                            grp.create_dataset(
+                                "mass", data=np.array([], dtype=np.float64))
+                            grp.create_dataset(
+                                "intensity_0", data=np.array([], dtype=np.float64))
+                            grp.create_dataset(
+                                "mass_0", data=np.array([], dtype=np.float64))
                     continue
                 ids = np.array([p[0] for p in particles])
                 x = np.array([p[1] for p in particles])
@@ -433,12 +473,16 @@ def run(
                 grp.create_dataset("ay", data=ay)
                 grp.create_dataset("az", data=az)
                 if has_props:
-                    grp.create_dataset("diameter", data=np.array(
-                        [p[10] for p in particles]))
-                    grp.create_dataset("intensity", data=np.array(
-                        [p[11] for p in particles]))
-                    grp.create_dataset("mass", data=np.array(
-                        [p[12] for p in particles]))
+                    ds = np.stack([np.atleast_1d(p[10]) for p in particles])
+                    ins = np.stack([np.atleast_1d(p[11]) for p in particles])
+                    ms = np.stack([np.atleast_1d(p[12]) for p in particles])
+                    grp.create_dataset("diameter", data=ds)
+                    grp.create_dataset("intensity", data=ins)
+                    grp.create_dataset("mass", data=ms)
+                    for c in range(ins.shape[1]):
+                        grp.create_dataset(f"intensity_{c}", data=ins[:, c])
+                    for c in range(ms.shape[1]):
+                        grp.create_dataset(f"mass_{c}", data=ms[:, c])
 
         max_block = max(
             bidx for bidx, _ in all_curve_data) if all_curve_data else -1

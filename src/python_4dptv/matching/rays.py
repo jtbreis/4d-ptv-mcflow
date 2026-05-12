@@ -38,6 +38,15 @@ def _split_frame_ranges(n_frames: int, n_parts: int) -> list[tuple[int, int]]:
     return ranges
 
 
+def _effective_frame_count(n_src: int, max_frames: int | None) -> int:
+    """Frames to process: min(n_src, max_frames) if max_frames is set, else n_src."""
+    if max_frames is None:
+        return n_src
+    if max_frames < 1:
+        raise ValueError("max_frames must be >= 1 when set")
+    return min(n_src, max_frames)
+
+
 def _chunks_per_camera(n_workers: int, ncameras: int) -> int:
     """Ceil(n_workers / ncameras); at least 1 chunk budget per camera when parallelizing."""
     if n_workers < 1 or ncameras < 1:
@@ -50,6 +59,122 @@ def _progress_interval(total_frames: int) -> int:
     if total_frames <= 0:
         return 1
     return max(1, total_frames // 50)
+
+
+def _normalize_one_center_rotate_token(tok: str):
+    t = tok.strip().lower()
+    if t in ("", "0", "none", "no"):
+        return None
+    if t in ("cw", "clockwise", "90cw", "rot90_cw"):
+        return "cw"
+    if t in ("ccw", "counterclockwise", "counter-clockwise", "90ccw", "rot90_ccw"):
+        return "ccw"
+    raise ValueError(f"Unknown center rotation token {tok!r}; use cw, ccw, or none")
+
+
+def normalize_center_rotate_per_camera(spec, ncameras: int) -> list:
+    """
+    Build a length-ncameras list of None | 'cw' | 'ccw'.
+
+    spec: None -> all None.
+    str 'pairwise' -> cameras 0–1: 90° CW, 2–3: 90° CCW (requires ncameras == 4).
+    str 'cw,ccw,...' -> comma-separated per camera (same order as Camera 0..N-1).
+    list/tuple -> same tokens, length must match ncameras.
+    """
+    if spec is None:
+        return [None] * ncameras
+    if isinstance(spec, (list, tuple)):
+        if len(spec) != ncameras:
+            raise ValueError(
+                f"center_rotate list length {len(spec)} != ncameras {ncameras}"
+            )
+        out_list = []
+        for x in spec:
+            if x is None:
+                out_list.append(None)
+                continue
+            out_list.append(_normalize_one_center_rotate_token(str(x)))
+        return out_list
+    if not isinstance(spec, str):
+        raise TypeError(f"center_rotate spec must be str, list, or None, got {type(spec)}")
+    s = spec.strip().lower()
+    if not s:
+        return [None] * ncameras
+    if s == "pairwise":
+        if ncameras != 4:
+            raise ValueError(
+                'center_rotate="pairwise" requires exactly 4 cameras '
+                "(cams 0–1: 90° clockwise, 2–3: 90° counter-clockwise)"
+            )
+        return ["cw", "cw", "ccw", "ccw"]
+    parts = [p.strip() for p in s.split(",")]
+    if len(parts) != ncameras:
+        raise ValueError(
+            f"center_rotate comma-list has {len(parts)} entries, need {ncameras} "
+            f"(one per camera 0..{ncameras - 1})"
+        )
+    return [_normalize_one_center_rotate_token(p) for p in parts]
+
+
+def normalize_image_size_per_camera(image_width, image_height, ncameras, rotate_per_cam: list):
+    """
+    Scalar image_width / image_height broadcast to all cameras; or pass a list/tuple of
+    length ncameras for per-camera resolution (only entries for cameras with rotation
+    must be positive).
+    Returns (w_list, h_list) each length ncameras, or (None, None) if no camera rotates.
+    """
+    if not any(r is not None for r in rotate_per_cam):
+        return None, None
+    if image_width is None or image_height is None:
+        raise ValueError(
+            "image_width and image_height are required when center_rotate applies "
+            "to any camera"
+        )
+
+    def expand_dim(val, name):
+        if isinstance(val, (list, tuple)):
+            if len(val) != ncameras:
+                raise ValueError(
+                    f"{name} list length {len(val)} must equal ncameras ({ncameras})"
+                )
+            return [int(v) for v in val]
+        return [int(val)] * ncameras
+
+    w_list = expand_dim(image_width, "image_width")
+    h_list = expand_dim(image_height, "image_height")
+    for i in range(ncameras):
+        if rotate_per_cam[i] is None:
+            continue
+        if w_list[i] < 1 or h_list[i] < 1:
+            raise ValueError(
+                f"image width/height for camera {i} must be positive when "
+                "its center_rotate is set"
+            )
+    return w_list, h_list
+
+
+def _rotate_centers_xy_90(frame_data: dict, w: int, h: int, direction: str) -> dict:
+    """
+    Remap particle (x, y) as if the image were rotated 90° in place (OpenCV-style axes:
+    x column left→right, y row top→bottom). Original image size is w×h; after rotation
+    the pixel grid is h×w, and this returns coordinates in that rotated grid.
+    """
+    if direction not in ("cw", "ccw"):
+        raise ValueError(direction)
+    x = np.asarray(frame_data["x"], dtype=np.float64)
+    y = np.asarray(frame_data["y"], dtype=np.float64)
+    wf = float(w)
+    hf = float(h)
+    if direction == "cw":
+        xn = hf - 1.0 - y
+        yn = x
+    else:
+        xn = y
+        yn = wf - 1.0 - x
+    out = dict(frame_data)
+    out["x"] = xn
+    out["y"] = yn
+    return out
 
 
 def _dataset_kwargs(arr):
@@ -94,7 +219,7 @@ def _stream_camera_chunk_worker(args):
     """
     Process a contiguous [start, end) frame range for one camera; write partial rays.h5.
     """
-    calib_path, cam_idx, center_file, start, end, out_partial_path, flush_every = args
+    calib_path, cam_idx, center_file, start, end, out_partial_path, flush_every, rot_dir, img_w, img_h = args
     n_local = end - start
     n_src = count_h5_center_frames(center_file)
     step = _progress_interval(n_local)
@@ -119,6 +244,9 @@ def _stream_camera_chunk_worker(args):
             for seq_idx in range(start, end):
                 grp_in = fcent[frame_keys[seq_idx]]
                 frame_data = read_center_frame_from_group(grp_in)
+                if rot_dir:
+                    frame_data = _rotate_centers_xy_90(
+                        frame_data, img_w, img_h, rot_dir)
                 xyz0, dd, diameter, intensity, mass, _ = _compute_frame_arrays(
                     calibration_cam, frame_data, store_xyz_for_plotting=False
                 )
@@ -167,13 +295,30 @@ def _merge_ray_chunks(final_path, partials_per_camera: list, ncameras: int):
 
 
 class Rays():
-    def __init__(self, path, calibration_folder=None, store_xyz_for_plotting=False):
+    def __init__(
+        self,
+        path,
+        calibration_folder=None,
+        store_xyz_for_plotting=False,
+        center_rotate=None,
+        image_width=None,
+        image_height=None,
+    ):
         """
         path: folder containing Centers/ and where rays will be read/written.
         calibration_folder: if set, load calib.h5 from this folder (e.g. test
             Calibration_Before calibration on points from Calibration_After).
         store_xyz_for_plotting: if True, keep full per-plane XYZ (large RAM);
             required only for plot_rays(). Default False to avoid OOM on dense data.
+        center_rotate: optional per-camera remap of center (x,y) as if that camera's
+            image were rotated 90° before calibration. Prefer a list/tuple of length
+            ncameras with entries None | 'cw' | 'ccw' (camera index matches calib order).
+            Alternatively: None (no remap); str 'pairwise' (4 cams: 0–1 CW, 2–3 CCW);
+            or comma-separated cw/ccw/none per camera.
+        image_width, image_height: original image size in pixels before rotation.
+            Integers apply to every camera that has a non-None center_rotate; or pass
+            list/tuple of length ncameras for per-camera width/height. Required when
+            any camera uses center_rotate.
         """
         self.path = path
         calib_path = calibration_folder if calibration_folder is not None else path
@@ -181,6 +326,13 @@ class Rays():
         self.calibration = import_calibration(calib_path)
         self.ncameras = self.calibration.shape[0]
         self.store_xyz_for_plotting = store_xyz_for_plotting
+
+        self._center_rotate = normalize_center_rotate_per_camera(
+            center_rotate, self.ncameras
+        )
+        self._image_w_list, self._image_h_list = normalize_image_size_per_camera(
+            image_width, image_height, self.ncameras, self._center_rotate
+        )
 
         self._center_files = self._discover_center_files()
 
@@ -214,6 +366,14 @@ class Rays():
 
     def _process_frame_arrays(self, cam_idx, frame_data):
         """Return xyz0, dd, optional XYZ for plotting, and scalar arrays for HDF5."""
+        rot = self._center_rotate[cam_idx]
+        if rot:
+            frame_data = _rotate_centers_xy_90(
+                frame_data,
+                self._image_w_list[cam_idx],
+                self._image_h_list[cam_idx],
+                rot,
+            )
         return _compute_frame_arrays(
             self.calibration[cam_idx], frame_data, self.store_xyz_for_plotting
         )
@@ -221,8 +381,8 @@ class Rays():
     def _write_frame_group(self, grp, xyz0, dd, diameter, intensity, mass):
         _write_frame_group_h5(grp, xyz0, dd, diameter, intensity, mass)
 
-    def _compute_rays_stream_to_disk(self, n_workers=1, flush_every=1):
-        """Read centers → compute → rays.h5. All frames; optional parallel chunk workers; HDF5 flush."""
+    def _compute_rays_stream_to_disk(self, n_workers=1, flush_every=1, max_frames=None):
+        """Read centers → compute → rays.h5. All frames (or first max_frames); optional parallel chunks."""
         if flush_every < 1:
             raise ValueError("flush_every must be >= 1")
         out_path = self.path + Filenames.RAYS.value
@@ -230,6 +390,17 @@ class Rays():
         os.makedirs(out_dir, exist_ok=True)
 
         calib_path = self._calib_path
+
+        if any(self._center_rotate):
+            parts = [
+                f"cam{i}:{self._center_rotate[i]}@{self._image_w_list[i]}x{self._image_h_list[i]}"
+                for i in range(self.ncameras)
+                if self._center_rotate[i]
+            ]
+            print(
+                "[rays] Center (x,y) remap (90° as image rotation): " + "; ".join(parts),
+                flush=True,
+            )
 
         if n_workers > 1:
             n_src_per_cam = [
@@ -244,12 +415,19 @@ class Rays():
             if n_src == 0:
                 raise RuntimeError(
                     "No center frames found in Centers/*.h5; cannot compute rays.")
+            n_eff = _effective_frame_count(n_src, max_frames)
+            if max_frames is not None and n_eff < n_src:
+                print(
+                    f"[rays] Limiting parallel ray compute to first {n_eff} of {n_src} "
+                    "frames per camera",
+                    flush=True,
+                )
             chunks_per_cam = _chunks_per_camera(n_workers, self.ncameras)
             tasks = []
             all_partial_paths = []
             for cam_idx in range(self.ncameras):
-                n_parts = min(chunks_per_cam, n_src_per_cam[cam_idx])
-                for start, end in _split_frame_ranges(n_src_per_cam[cam_idx], n_parts):
+                n_parts = min(chunks_per_cam, n_eff)
+                for start, end in _split_frame_ranges(n_eff, n_parts):
                     fd, ppath = tempfile.mkstemp(
                         suffix=f"_cam{cam_idx}_f{start}_{end}_rays.h5", dir=out_dir
                     )
@@ -264,6 +442,13 @@ class Rays():
                             end,
                             ppath,
                             flush_every,
+                            self._center_rotate[cam_idx],
+                            self._image_w_list[cam_idx]
+                            if self._image_w_list is not None
+                            else 0,
+                            self._image_h_list[cam_idx]
+                            if self._image_h_list is not None
+                            else 0,
                         )
                     )
 
@@ -312,18 +497,30 @@ class Rays():
                 f"h5 flush every {flush_every} frame(s)",
                 flush=True,
             )
+            n_src0 = count_h5_center_frames(self._center_files[0])
+            n_eff_seq = _effective_frame_count(n_src0, max_frames)
+            if max_frames is not None and n_eff_seq < n_src0:
+                print(
+                    f"[rays] Limiting sequential ray compute to first {n_eff_seq} of "
+                    f"{n_src0} frames per camera",
+                    flush=True,
+                )
             with h5py.File(out_path, "w") as fout:
                 fout.attrs["ncameras"] = self.ncameras
                 for cam_idx in range(self.ncameras):
                     fpath = self._center_files[cam_idx]
                     n_src = count_h5_center_frames(fpath)
-                    step = _progress_interval(n_src)
+                    n_eff = _effective_frame_count(n_src, max_frames)
+                    step = _progress_interval(n_eff)
                     print(
-                        f"Camera {cam_idx} (streaming): {n_src} frames",
+                        f"Camera {cam_idx} (streaming): {n_eff} frames"
+                        + (f" (of {n_src} in centers)" if n_eff < n_src else ""),
                         flush=True,
                     )
                     camgrp = fout.create_group(f"Camera {cam_idx}")
                     for frame_idx, frame_data in enumerate(iter_read_h5_centers(fpath)):
+                        if frame_idx >= n_eff:
+                            break
                         xyz0, dd, diameter, intensity, mass, xyz_plot = (
                             self._process_frame_arrays(cam_idx, frame_data)
                         )
@@ -335,25 +532,25 @@ class Rays():
                             fout.flush()
                         if (
                             done == 1
-                            or done == n_src
+                            or done == n_eff
                             or done % step == 0
                         ):
-                            pct = 100.0 * done / n_src if n_src else 100.0
+                            pct = 100.0 * done / n_eff if n_eff else 100.0
                             print(
-                                f"  Camera {cam_idx}: {done}/{n_src} "
+                                f"  Camera {cam_idx}: {done}/{n_eff} "
                                 f"({pct:.1f}%)  frame {frame_idx}",
                                 flush=True,
                             )
                         del xyz0, dd, diameter, intensity, mass, xyz_plot, frame_data
                     fout.flush()
                     print(
-                        f"  Camera {cam_idx}: finished, {n_src} frames written",
+                        f"  Camera {cam_idx}: finished, {n_eff} frames written",
                         flush=True,
                     )
 
         self._output_written = True
 
-    def _compute_rays_accumulate(self):
+    def _compute_rays_accumulate(self, max_frames=None):
         """Keep xyz0/dd in memory for write_rays() later; never loads all centers at once."""
         self.xyz0 = np.empty(self.ncameras, dtype=object)
         self.dd = np.empty(self.ncameras, dtype=object)
@@ -366,9 +563,11 @@ class Rays():
         for cam_idx in range(self.ncameras):
             fpath = self._center_files[cam_idx]
             n_src = count_h5_center_frames(fpath)
-            step = _progress_interval(n_src)
+            n_eff = _effective_frame_count(n_src, max_frames)
+            step = _progress_interval(n_eff)
             print(
-                f"Camera {cam_idx} (accumulate in RAM): {n_src} frames",
+                f"Camera {cam_idx} (accumulate in RAM): {n_eff} frames"
+                + (f" (of {n_src} in centers)" if n_eff < n_src else ""),
                 flush=True,
             )
             xyz0_list, dd_list = [], []
@@ -377,6 +576,8 @@ class Rays():
 
             n_kept = 0
             for frame_idx, frame_data in enumerate(iter_read_h5_centers(fpath)):
+                if n_kept >= n_eff:
+                    break
                 xyz0, dd, diameter, intensity, mass, xyz_plot = self._process_frame_arrays(
                     cam_idx, frame_data
                 )
@@ -390,12 +591,12 @@ class Rays():
                 n_kept += 1
                 if (
                     n_kept == 1
-                    or n_kept == n_src
+                    or n_kept == n_eff
                     or n_kept % step == 0
                 ):
-                    pct = 100.0 * n_kept / n_src if n_src else 100.0
+                    pct = 100.0 * n_kept / n_eff if n_eff else 100.0
                     print(
-                        f"  Camera {cam_idx}: {n_kept}/{n_src} "
+                        f"  Camera {cam_idx}: {n_kept}/{n_eff} "
                         f"({pct:.1f}%)  frame {frame_idx}",
                         flush=True,
                     )
@@ -412,15 +613,17 @@ class Rays():
                 flush=True,
             )
 
-    def process_camera(self, cam_idx: int = 0):
+    def process_camera(self, cam_idx: int = 0, max_frames=None):
         """Process one camera using in-memory self.centers (call load_centers() first)."""
         if self.centers is None:
             raise RuntimeError(
                 "load_centers() must be called before process_camera()")
-        n_frames = len(self.centers[cam_idx])
+        n_all = len(self.centers[cam_idx])
+        n_frames = _effective_frame_count(n_all, max_frames)
         step = _progress_interval(n_frames)
         print(
-            f"Camera {cam_idx} (in-memory centers): {n_frames} frames",
+            f"Camera {cam_idx} (in-memory centers): {n_frames} frames"
+            + (f" (of {n_all})" if n_frames < n_all else ""),
             flush=True,
         )
         if self.store_xyz_for_plotting:
@@ -431,7 +634,7 @@ class Rays():
         self.intensity[cam_idx] = np.empty(n_frames, dtype=object)
         self.mass[cam_idx] = np.empty(n_frames, dtype=object)
 
-        for frame_idx, frame_data in enumerate(self.centers[cam_idx]):
+        for frame_idx, frame_data in enumerate(self.centers[cam_idx][:n_frames]):
             done = frame_idx + 1
             if done == 1 or done == n_frames or done % step == 0:
                 pct = 100.0 * done / n_frames if n_frames else 100.0
@@ -439,26 +642,18 @@ class Rays():
                     f"  Camera {cam_idx}: frame {done}/{n_frames} ({pct:.1f}%)",
                     flush=True,
                 )
-            frame_xy = np.column_stack([frame_data["x"], frame_data["y"]])
-            xyz = self.calibration[cam_idx].transform_to_real_world(frame_xy)
-            self.xyz0[cam_idx][frame_idx], self.dd[cam_idx][frame_idx] = fit3dline(
-                xyz)
+            xyz0, dd, diameter, intensity, mass, xyz_plot = (
+                self._process_frame_arrays(cam_idx, frame_data)
+            )
+            self.xyz0[cam_idx][frame_idx] = xyz0
+            self.dd[cam_idx][frame_idx] = dd
+            self.diameter[cam_idx][frame_idx] = diameter
+            self.intensity[cam_idx][frame_idx] = intensity
+            self.mass[cam_idx][frame_idx] = mass
             if self.store_xyz_for_plotting:
-                self.XYZ[cam_idx][frame_idx] = xyz
-            n_rays = len(frame_data["x"])
-            for key, arr in (
-                ("diameter", self.diameter),
-                ("intensity", self.intensity),
-                ("mass", self.mass),
-            ):
-                if key in frame_data:
-                    arr[cam_idx][frame_idx] = np.asarray(
-                        frame_data[key], dtype=np.float64)
-                else:
-                    arr[cam_idx][frame_idx] = np.full(
-                        n_rays, np.nan, dtype=np.float64)
+                self.XYZ[cam_idx][frame_idx] = xyz_plot
 
-    def compute_rays(self, stream_to_disk=True, n_workers=1, flush_every=1):
+    def compute_rays(self, stream_to_disk=True, n_workers=1, flush_every=1, max_frames=None):
         """
         Compute ray origins and directions from centers (all frames).
 
@@ -474,6 +669,9 @@ class Rays():
         partial HDF5 files are merged. With one camera, all workers can serve that camera's
         chunks. Ignored when stream_to_disk=False (use 1).
 
+        max_frames: if set, only the first N frames per camera are processed (rays.h5
+        contains frame00000 … frame{N-1:05d}).
+
         stream_to_disk=False: fill xyz0/dd in memory for a later write_rays(); still
         streams center files frame-by-frame unless you called load_centers().
         """
@@ -488,7 +686,8 @@ class Rays():
                 "use stream_to_disk=False and then write_rays(), or disable plotting storage."
             )
         if stream_to_disk:
-            self._compute_rays_stream_to_disk(n_workers, flush_every)
+            self._compute_rays_stream_to_disk(
+                n_workers, flush_every, max_frames=max_frames)
         else:
             if n_workers > 1:
                 raise ValueError("n_workers>1 requires stream_to_disk=True")
@@ -502,9 +701,9 @@ class Rays():
                     if self.store_xyz_for_plotting:
                         self.XYZ = np.empty(self.ncameras, dtype=object)
                 for cam_idx in range(self.ncameras):
-                    self.process_camera(cam_idx=cam_idx)
+                    self.process_camera(cam_idx=cam_idx, max_frames=max_frames)
             else:
-                self._compute_rays_accumulate()
+                self._compute_rays_accumulate(max_frames=max_frames)
 
     def find_rays(calibration, x_px, y_px):
         nplanes = calibration["n_planes"]

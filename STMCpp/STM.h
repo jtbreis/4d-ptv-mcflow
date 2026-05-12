@@ -3,6 +3,7 @@
  *
  */
 
+#include <map>
 #include <vector>
 #include "STM_types.h"
 
@@ -23,6 +24,25 @@ void GenerateCamRayIDPermutations(std::vector<std::vector<camrayid>> Lists, std:
 std::vector<traversedcell> DirectionalVoxelTraversal(transformedray ray, std::vector<std::vector<double>> bounds);
 transformedray PrepareRay(ray r, boundingboxspec bb);
 candidatematch ClosestPointToLines(std::map<std::pair<int, int>,transformedray>& raydb, std::vector<camrayid> crids);
-std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& raydata, boundingboxspec bb, std::vector<std::vector<double>> bounds, int maxmatchesperray, unsigned int mincameras, double maxdistance, double multiplematchesperraymindistance, STMFrameTiming* timing_out = nullptr);
+std::vector<candidatematch> SpaceTraversalMatchingCandidatesOnly(const std::vector<ray>& raydata,
+                                                                 const boundingboxspec& bb,
+                                                                 const std::vector<std::vector<double>>& bounds,
+                                                                 unsigned int mincameras,
+                                                                 STMFrameTiming* timing_out = nullptr,
+                                                                 bool verbose = true);
+std::vector<candidatematch> SelectApprovedMatchesFromSortedCandidates(const std::vector<candidatematch>& candidatematches,
+                                                                       int maxmatchesperray,
+                                                                       double maxdistance,
+                                                                       double multiplematchesperraymindistance,
+                                                                       STMFrameTiming* timing_out = nullptr,
+                                                                       bool verbose = true);
+std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& raydata,
+                                                   const boundingboxspec& bb,
+                                                   const std::vector<std::vector<double>>& bounds,
+                                                   int maxmatchesperray,
+                                                   unsigned int mincameras,
+                                                   double maxdistance,
+                                                   double multiplematchesperraymindistance,
+                                                   STMFrameTiming* timing_out = nullptr);
 
 void init();

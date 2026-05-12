@@ -31,7 +31,67 @@ def parse_args():
     p.add_argument('--n-workers', type=int, default=1,
                    help='Parallel processes (one per camera, capped at n cameras). '
                         'Requires stream_to_disk (default).')
+    p.add_argument(
+        '--center-rotate',
+        type=str,
+        default=None,
+        help="Per-camera center (x,y) remap (90° rotation): comma-separated cw/ccw/none in calib order, "
+             "or 'pairwise' (4 cams: 0–1 cw, 2–3 ccw). Env: RAYS_CENTER_ROTATE.",
+    )
+    p.add_argument(
+        '--image-width',
+        type=str,
+        default=None,
+        help='Image width(s) in pixels before rotation: one integer, or comma-separated '
+             'per camera (same order as calib). Required with --center-rotate. Env: RAYS_IMAGE_WIDTH.',
+    )
+    p.add_argument(
+        '--image-height',
+        type=str,
+        default=None,
+        help='Image height(s): same rules as --image-width. Env: RAYS_IMAGE_HEIGHT.',
+    )
     return p.parse_args()
+
+
+def _parse_image_dim(value):
+    """None, int, or list of int for per-camera image size."""
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, list):
+        return [int(x) for x in value]
+    s = str(value).strip()
+    if not s:
+        return None
+    if ',' in s:
+        parts = [p.strip() for p in s.split(',') if p.strip()]
+        return [int(p) for p in parts]
+    return int(s)
+
+
+def _apply_compute_rays_env_overrides(args):
+    """Fill args from environment when CLI omitted (Docker job lines)."""
+    if args.center_rotate is None:
+        v = os.environ.get('RAYS_CENTER_ROTATE')
+        if v is not None and str(v).strip():
+            args.center_rotate = v.strip()
+    if args.image_width is None:
+        v = os.environ.get('RAYS_IMAGE_WIDTH')
+        if v is not None and str(v).strip():
+            args.image_width = v.strip()
+    if args.image_height is None:
+        v = os.environ.get('RAYS_IMAGE_HEIGHT')
+        if v is not None and str(v).strip():
+            args.image_height = v.strip()
+    return args
+
+
+def _finalize_image_dims(args):
+    args.image_width = _parse_image_dim(args.image_width)
+    args.image_height = _parse_image_dim(args.image_height)
+    return args
 
 
 def discover_runs(output_base):
@@ -45,14 +105,26 @@ def discover_runs(output_base):
     return runs
 
 
-def run_rays_for_run(process_data_path, flush_every=1, n_workers=1):
-    rays = Rays(process_data_path)
+def run_rays_for_run(
+    process_data_path,
+    flush_every=1,
+    n_workers=1,
+    center_rotate=None,
+    image_width=None,
+    image_height=None,
+):
+    rays = Rays(
+        process_data_path,
+        center_rotate=center_rotate,
+        image_width=image_width,
+        image_height=image_height,
+    )
     rays.compute_rays(n_workers=n_workers, flush_every=flush_every)
     rays.write_rays()
 
 
 def main():
-    args = parse_args()
+    args = _finalize_image_dims(_apply_compute_rays_env_overrides(parse_args()))
     if args.output_base:
         out_base = os.path.join(args.output_base, args.case)
     else:
@@ -73,7 +145,13 @@ def main():
 
     print(f"Compute rays (all runs): case={args.case}, runs={runs}")
     print(
-        f"  output_base={out_base}  flush_every={args.flush_every}  n_workers={args.n_workers}")
+        f"  output_base={out_base}  flush_every={args.flush_every}  n_workers={args.n_workers}"
+        + (
+            f"  center_rotate={args.center_rotate!r}  image_wh=({args.image_width!r}, {args.image_height!r})"
+            if args.center_rotate
+            else ""
+        ),
+    )
 
     for run in runs:
         out_path = os.path.join(out_base, run)
@@ -81,8 +159,14 @@ def main():
             print(f"Skip {run}: missing {out_path}")
             continue
         print(f"Processing run: {run}")
-        run_rays_for_run(out_path, flush_every=args.flush_every,
-                         n_workers=args.n_workers)
+        run_rays_for_run(
+            out_path,
+            flush_every=args.flush_every,
+            n_workers=args.n_workers,
+            center_rotate=args.center_rotate,
+            image_width=args.image_width,
+            image_height=args.image_height,
+        )
         print(f"Done {run}")
     print("All runs completed.")
 

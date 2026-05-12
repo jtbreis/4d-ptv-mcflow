@@ -1,0 +1,15 @@
+# Build from repo root (Dockerfile COPY expects full tree).
+# Run: docker compose run --rm compute_rays -- --case TTI_no_gravity
+# Detached: docker compose run -d --rm compute_rays -- --case ...
+# Env for mounts: OUTPUT_DIR (default: repo data/ via ../../data from this file).
+
+services:
+  compute_rays:
+    build:
+      context: ../..
+      dockerfile: docker/compute_rays_all_runs/Dockerfile.compute_rays_all_runs
+    image: ${IMAGE_NAME:-4d-ptv-compute-rays-all-runs}
+    volumes:
+      - type: bind
+        source: ${OUTPUT_DIR:-../../data}
+        target: /workspaces/4d-ptv-mcflow/data

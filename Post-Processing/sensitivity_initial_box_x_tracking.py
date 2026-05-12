@@ -1,10 +1,12 @@
 """
 Sensitivity analysis on initial box size in x (one-direction / asymmetric) for 4-frame tracking.
 
-Runs tracking on the tracking_test_threshold1 dataset for three initial x box configurations:
-  - (-1, 3): x in [x0-1, x0+3]  (lo=1, hi=3)
-  - (0, 3):  x in [x0, x0+3]    (lo=0, hi=3) — one direction only
-  - (1, 3.5): x in [x0-1, x0+3.5] (lo=1, hi=3.5)
+Runs tracking on the tracking_test_threshold1 dataset for three initial x box configurations.
+Offsets (lo, hi) are passed to FourFrameTracking as box_size_initial_x_lo/hi; physical x on
+frame+1 lies in [x0 + min(lo, hi), x0 + max(lo, hi)].
+  - (-1, 3):  [x0-1, x0+3]
+  - (0, 3):   [x0, x0+3]  (one direction only)
+  - (-1, 3.5): [x0-1, x0+3.5]
 
 All runs use box_size_track=0.5 and initial box y/z = 0.5 (symmetric).
 Run from project root: python Post-Processing/sensitivity_initial_box_x_tracking.py
@@ -48,11 +50,8 @@ DEFAULT_OUTPUT_DIR = os.path.join(
     PROJECT_ROOT, "data", "sensitivity_initial_box_x", "tracking_test_threshold1"
 )
 
-# (x_lo, x_hi) for initial search in x: [x0 - x_lo, x0 + x_hi]
-# - (-1 to 3) -> lo=1, hi=3
-# - (0 to 3)  -> lo=0, hi=3  (one direction only)
-# - (1 to 3.5)-> lo=1, hi=3.5
-DEFAULT_INITIAL_X_CONFIGS = [(1.0, 3.0), (0.0, 3.0), (1.0, 3.5)]
+# (x_lo, x_hi) signed offsets for FourFrameTracking(..., box_size_initial_x_lo=..., box_size_initial_x_hi=...).
+DEFAULT_INITIAL_X_CONFIGS = [(-1.0, 3.0), (0.0, 3.0), (-1.0, 3.5)]
 
 BOX_SIZE_TRACK = 0.5
 BOX_SIZE_INITIAL_Y = 0.5
@@ -99,7 +98,11 @@ def run_sensitivity(
     saved_paths = []
 
     for i, (x_lo, x_hi) in enumerate(initial_x_configs):
-        print(f"[{i + 1}/{len(initial_x_configs)}] initial x: [{x_lo}, {x_hi}] (x in [x0-{x_lo}, x0+{x_hi}])")
+        _xmn, _xmx = min(x_lo, x_hi), max(x_lo, x_hi)
+        print(
+            f"[{i + 1}/{len(initial_x_configs)}] initial x offsets lo={x_lo}, hi={x_hi} "
+            f"=> physical [x0+{_xmn:.2f}, x0+{_xmx:.2f}]"
+        )
         create_h5_file(folder=dataset_folder)
         tracking = FourFrameTracking(
             dataset_folder,
@@ -150,7 +153,7 @@ def parse_args():
         "--configs",
         type=str,
         default=None,
-        help="Comma-separated 'lo,hi' pairs, e.g. '1,3 0,3 1,3.5' (default: 1,3 0,3 1,3.5).",
+        help="Comma-separated 'lo,hi' offset pairs, e.g. '-1,3 0,3 -1,3.5' (default: built-in list).",
     )
     p.add_argument(
         "--workers",

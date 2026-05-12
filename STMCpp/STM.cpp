@@ -481,120 +481,106 @@ candidatematch ClosestPointToLines(std::map<std::pair<int, int>,transformedray>&
     return(out);
 }
 
-std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& raydata, boundingboxspec bb, std::vector<std::vector<double>> bounds, int maxmatchesperray, unsigned int mincameras, double maxdistance, double multiplematchesperraymindistance, STMFrameTiming* timing_out)
-{
-    const bool profile = (timing_out != nullptr);
-    stm_clock::time_point t_match0;
-    if (profile) {
-        t_match0 = stm_clock::now();
-    }
 
-    //std::cout << "Bounding box: " << bb.xmin << " - " << bb.xmax << " :: "  << bb.ymin << " - " << bb.ymax << " :: " << bb.zmin << " - " << bb.zmax << "\n";
-    //std::cout << "First: " << raydata[0].camid << "-" << raydata[0].rayid << "\n";
-    //std::cout << "Last: " << raydata[raydata.size()-1].camid << "-" << raydata[raydata.size()-1].rayid << "\n";
-    
-    // Prepare the rays
+std::vector<candidatematch> SpaceTraversalMatchingCandidatesOnly(
+    const std::vector<ray>& raydata,
+    const boundingboxspec& bb,
+    const std::vector<std::vector<double>>& bounds,
+    unsigned int mincameras,
+    STMFrameTiming* timing_out,
+    bool verbose) {
+    const bool profile = (timing_out != nullptr);
     stm_clock::time_point t0;
     if (profile) {
         t0 = stm_clock::now();
     }
-    std::map<std::pair<int, int>,transformedray> raydb;         // Store a dictionary of (cameraid, rayid): transformedray
-    std::vector<transformedray> validrays;                      // Store the transformed rays
-    std::map<int,int> numrays;                                  // Store the number of rays per camera
-    std::map<int,int> invalidcounter;                           // Store the number that are invalid
-    for(unsigned int i = 0; i < raydata.size(); i++)
-    {
-        if(numrays.find(raydata[i].camid) == numrays.end())     // Key does not yet exist  // maintain counter
-            numrays.insert(std::make_pair(raydata[i].camid,1));
-        else // Key exists
-            numrays[raydata[i].camid]++;
-        
-        transformedray freshray;
-        freshray = PrepareRay(raydata[i],bb);
-        if(freshray.hit)
-        {
-            raydb.insert(std::make_pair(std::make_pair(freshray.camid, freshray.rayid),freshray));
-            validrays.push_back(freshray);
-        }
+    std::map<std::pair<int, int>, transformedray> raydb;
+    std::vector<transformedray> validrays;
+    std::map<int, int> numrays;
+    std::map<int, int> invalidcounter;
+    for (unsigned int i = 0; i < raydata.size(); i++) {
+        if (numrays.find(raydata[i].camid) == numrays.end())
+            numrays.insert(std::make_pair(raydata[i].camid, 1));
         else
-        {
-            if(invalidcounter.find(freshray.camid) == invalidcounter.end()) // Key does not yet exist  // maintain counter
-                invalidcounter.insert(std::make_pair(freshray.camid,1));
-            else // Key exists
+            numrays[raydata[i].camid]++;
+
+        transformedray freshray;
+        freshray = PrepareRay(raydata[i], bb);
+        if (freshray.hit) {
+            raydb.insert(std::make_pair(std::make_pair(freshray.camid, freshray.rayid), freshray));
+            validrays.push_back(freshray);
+        } else {
+            if (invalidcounter.find(freshray.camid) == invalidcounter.end())
+                invalidcounter.insert(std::make_pair(freshray.camid, 1));
+            else
                 invalidcounter[freshray.camid]++;
         }
     }
     if (profile) {
         timing_out->prepare_rays_ms += stm_elapsed_ms(t0);
     }
-    
-    std::cout << "# of rays for each camera: {";
-    for (auto kv = numrays.begin(); kv != numrays.end();) {
-        std::cout << kv->first << ": " << kv->second;
-        if(++kv != numrays.end())
-        {
-            std::cout << ", ";
+
+    if (verbose) {
+        std::cout << "# of rays for each camera: {";
+        for (auto kv = numrays.begin(); kv != numrays.end();) {
+            std::cout << kv->first << ": " << kv->second;
+            if (++kv != numrays.end()) {
+                std::cout << ", ";
+            }
         }
-    }
-    std::cout << "}\n";
-    
-    std::cout << "# of rays that miss the bounding box: {";
-    for (auto kv = invalidcounter.begin(); kv != invalidcounter.end();) {
-        std::cout << kv->first << ": " << kv->second;
-        if(++kv != invalidcounter.end())
-        {
-            std::cout << ", ";
+        std::cout << "}\n";
+
+        std::cout << "# of rays that miss the bounding box: {";
+        for (auto kv = invalidcounter.begin(); kv != invalidcounter.end();) {
+            std::cout << kv->first << ": " << kv->second;
+            if (++kv != invalidcounter.end()) {
+                std::cout << ", ";
+            }
         }
+        std::cout << "}\n";
     }
-    std::cout << "}\n";
-    
-//    for (auto kv : invalidcounter) {
-//        std::cout << "Camera " << kv.first << " has " << kv.second << " rays that miss the bounding box\n";
-//    }
-    
+
     if (profile) {
         t0 = stm_clock::now();
     }
-    // Do the traversing
     std::vector<traversedcell> traversed;
     std::vector<traversedcell> tmptraverse;
     std::vector<traversedcell> tmptraverse2;
     transformedray revvr;
-    //validrays.resize(48);
-    for (transformedray vr : validrays)
-    {
-        tmptraverse = DirectionalVoxelTraversal(vr,bounds);         // Traverse forwards
-        if(vr.inside)                                               // Ray is inside, traverse also backwards
-        {
+    for (transformedray vr : validrays) {
+        tmptraverse = DirectionalVoxelTraversal(vr, bounds);
+        if (vr.inside) {
             revvr = vr;
             revvr.vx *= -1;
             revvr.vy *= -1;
             revvr.vz *= -1;
-            tmptraverse2 = DirectionalVoxelTraversal(revvr,bounds); // Combine these two…
-            tmptraverse.insert(tmptraverse.end(), tmptraverse2.begin(), tmptraverse2.end()); //
+            tmptraverse2 = DirectionalVoxelTraversal(revvr, bounds);
+            tmptraverse.insert(tmptraverse.end(), tmptraverse2.begin(), tmptraverse2.end());
         }
-        std::sort(tmptraverse.begin(),tmptraverse.end(),comparetraversedcell);
-        tmptraverse.erase(std::unique(tmptraverse.begin(),tmptraverse.end(),comparetraversedcellsamecell),tmptraverse.end());
-        //std::cout << tmptraverse.size() << " ";
+        std::sort(tmptraverse.begin(), tmptraverse.end(), comparetraversedcell);
+        tmptraverse.erase(std::unique(tmptraverse.begin(), tmptraverse.end(), comparetraversedcellsamecell),
+                          tmptraverse.end());
         traversed.insert(traversed.end(), tmptraverse.begin(), tmptraverse.end());
     }
     if (profile) {
         timing_out->voxel_traversal_ms += stm_elapsed_ms(t0);
     }
-//    for(auto i: traversed)
-//    {
-//            std::cout << i.camid << "." << i.rayid << "  " << i.cellid.xi << "," << i.cellid.yi << "," << i.cellid.xi << "\n";
-//    }
-    
-    std::cout << "# of voxels traversed after expansion: " << traversed.size() << "\n";
+
+    if (verbose) {
+        std::cout << "# of voxels traversed after expansion: " << traversed.size() << "\n";
+    }
+    if (traversed.empty()) {
+        return std::vector<candidatematch>();
+    }
+
     if (profile) {
         t0 = stm_clock::now();
     }
-    std::sort(traversed.begin(),traversed.end(),comparetraversedcell);
+    std::sort(traversed.begin(), traversed.end(), comparetraversedcell);
     if (profile) {
         timing_out->sort_traversed_ms += stm_elapsed_ms(t0);
     }
-    
+
     if (profile) {
         t0 = stm_clock::now();
     }
@@ -602,22 +588,17 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
     groupedcell tmpgroupedcell;
     tmpgroupedcell.camrayids.push_back({traversed[0].camid, traversed[0].rayid});
     tmpgroupedcell.cellid = traversed[0].cellid;
-    for(unsigned long i = 1; i < traversed.size(); i++)
-    {
-
-        if(tmpgroupedcell.cellid.xi == traversed[i].cellid.xi && tmpgroupedcell.cellid.yi == traversed[i].cellid.yi && tmpgroupedcell.cellid.zi == traversed[i].cellid.zi)
-        {
+    for (unsigned long i = 1; i < traversed.size(); i++) {
+        if (tmpgroupedcell.cellid.xi == traversed[i].cellid.xi && tmpgroupedcell.cellid.yi == traversed[i].cellid.yi &&
+            tmpgroupedcell.cellid.zi == traversed[i].cellid.zi) {
             tmpgroupedcell.camrayids.push_back({traversed[i].camid, traversed[i].rayid});
-        }
-        else
-        {
-            if(tmpgroupedcell.camrayids.size() >= mincameras)       // Rough prune
-            {
+        } else {
+            if (tmpgroupedcell.camrayids.size() >= mincameras) {
                 std::vector<camrayid> tmpcamrayids = tmpgroupedcell.camrayids;
                 std::sort(tmpcamrayids.begin(), tmpcamrayids.end(), comparecamrayidscam);
-                long uniquecount = std::unique(tmpcamrayids.begin(), tmpcamrayids.end(), comparecamrayidsamecam) - tmpcamrayids.begin();
-                if(uniquecount >= mincameras)                       // More careful prune
-                {
+                long uniquecount =
+                    std::unique(tmpcamrayids.begin(), tmpcamrayids.end(), comparecamrayidsamecam) - tmpcamrayids.begin();
+                if (uniquecount >= mincameras) {
                     groupedcells.push_back(tmpgroupedcell);
                 }
             }
@@ -626,62 +607,53 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
             tmpgroupedcell.camrayids.push_back({traversed[i].camid, traversed[i].rayid});
         }
     }
-    // Process remainder:
-    if(tmpgroupedcell.camrayids.size() >= mincameras)       // Rough prune
-    {
+    if (tmpgroupedcell.camrayids.size() >= mincameras) {
         std::vector<camrayid> tmpcamrayids = tmpgroupedcell.camrayids;
         std::sort(tmpcamrayids.begin(), tmpcamrayids.end(), comparecamrayidscam);
-        long uniquecount = std::unique(tmpcamrayids.begin(), tmpcamrayids.end(), comparecamrayidsamecam) - tmpcamrayids.begin();
-        if(uniquecount >= mincameras)                       // More careful prune
-        {
+        long uniquecount =
+            std::unique(tmpcamrayids.begin(), tmpcamrayids.end(), comparecamrayidsamecam) - tmpcamrayids.begin();
+        if (uniquecount >= mincameras) {
             groupedcells.push_back(tmpgroupedcell);
         }
     }
     if (profile) {
         timing_out->group_cells_ms += stm_elapsed_ms(t0);
     }
-    std::cout << "Prune based on number of cameras: " << groupedcells.size() << "\n";
-    
+    if (verbose) {
+        std::cout << "Prune based on number of cameras: " << groupedcells.size() << "\n";
+    }
+
     if (profile) {
         t0 = stm_clock::now();
     }
-    // Get rid of cellID
     std::vector<std::vector<camrayid>> candidatepairs;
     std::vector<camrayid> tmpcamrayids;
-    for(auto i: groupedcells)
-    {
+    for (auto i : groupedcells) {
         tmpcamrayids = i.camrayids;
-        std::sort(tmpcamrayids.begin(),tmpcamrayids.end(),comparecamrayidscamray);
+        std::sort(tmpcamrayids.begin(), tmpcamrayids.end(), comparecamrayidscamray);
         candidatepairs.push_back(tmpcamrayids);
-        
     }
-    // This most of the time semi-sorted, so we can unique first and remove a lot…
-    candidatepairs.erase(std::unique(candidatepairs.begin(), candidatepairs.end(), comparecamrayidsidentical), candidatepairs.end());
-    std::sort(candidatepairs.begin(),candidatepairs.end(),comparecamrayidsordered);         // Now sort followed by another unique…
-    candidatepairs.erase(std::unique(candidatepairs.begin(), candidatepairs.end(), comparecamrayidsidentical), candidatepairs.end());
+    candidatepairs.erase(std::unique(candidatepairs.begin(), candidatepairs.end(), comparecamrayidsidentical),
+                          candidatepairs.end());
+    std::sort(candidatepairs.begin(), candidatepairs.end(), comparecamrayidsordered);
+    candidatepairs.erase(std::unique(candidatepairs.begin(), candidatepairs.end(), comparecamrayidsidentical),
+                          candidatepairs.end());
     if (profile) {
         timing_out->candidate_pairs_ms += stm_elapsed_ms(t0);
     }
-    
+
     if (profile) {
         t0 = stm_clock::now();
     }
     std::vector<std::vector<camrayid>> candidates;
-    for(std::vector<camrayid> cand: candidatepairs)
-    {
-        // Split candidates in to groups based on camera:
+    for (std::vector<camrayid> cand : candidatepairs) {
         std::vector<std::vector<camrayid>> groupedcandidates;
         std::vector<camrayid> tmpgroupedcandidates;
         tmpgroupedcandidates.push_back(cand[0]);
-        for(unsigned long i = 1; i < cand.size(); i++)
-        {
-            
-            if(tmpgroupedcandidates[0].camid == cand[i].camid)
-            {
+        for (unsigned long i = 1; i < cand.size(); i++) {
+            if (tmpgroupedcandidates[0].camid == cand[i].camid) {
                 tmpgroupedcandidates.push_back(cand[i]);
-            }
-            else
-            {
+            } else {
                 groupedcandidates.push_back(tmpgroupedcandidates);
                 tmpgroupedcandidates.clear();
                 tmpgroupedcandidates.push_back(cand[i]);
@@ -690,44 +662,34 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
         groupedcandidates.push_back(tmpgroupedcandidates);
         std::vector<camrayid> tmp;
         std::vector<std::vector<camrayid>> newcandidates;
-        
+
         GenerateCamRayIDPermutations(groupedcandidates, newcandidates, 0, tmp);
         candidates.insert(candidates.end(), newcandidates.begin(), newcandidates.end());
     }
-//    std::cout << "Candidates size: " << candidates.size() << "\n";
 
-    std::sort(candidates.begin(),candidates.end(),comparecamrayidsordered);
+    std::sort(candidates.begin(), candidates.end(), comparecamrayidsordered);
     candidates.erase(std::unique(candidates.begin(), candidates.end(), comparecamrayidsidentical), candidates.end());
     if (profile) {
         timing_out->permutations_dedup_ms += stm_elapsed_ms(t0);
     }
-    
-    std::cout << "Duplicate candidates removed: " << candidates.size() << "\n";
-//    for(auto i: candidates)
-//    {
-//        std::cout << "candidates: ";
-//        for (auto j: i)
-//        {
-//            std::cout << j.camid << "." <<j .rayid << " ";
-//        }
-//        std::cout << "\n";
-//    }
-    
+
+    if (verbose) {
+        std::cout << "Duplicate candidates removed: " << candidates.size() << "\n";
+    }
+
     if (profile) {
         t0 = stm_clock::now();
     }
-    // Calculate match positions and errors for each of the candidates
     std::vector<candidatematch> candidatematches;
-    for(auto cand: candidates)
-    {
+    for (auto cand : candidates) {
         candidatematch tmp;
-        tmp = ClosestPointToLines(raydb,cand);
+        tmp = ClosestPointToLines(raydb, cand);
         candidatematches.push_back(tmp);
     }
     if (profile) {
         timing_out->closest_point_ms += stm_elapsed_ms(t0);
     }
-    
+
     if (profile) {
         t0 = stm_clock::now();
     }
@@ -735,92 +697,73 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
     if (profile) {
         timing_out->sort_candidate_matches_ms += stm_elapsed_ms(t0);
     }
-    
-    
-//    for(auto i: candidatematches)
-//    {
-//        std::cout << "Candidates match: ";
-//        for (auto j: i.camrayids)
-//        {
-//            std::cout << j.camid << "." <<j .rayid << "\t";
-//        }
-//        std::cout << "\t| "  << i.matcherror << "\t| " << i.matchx << "\t"  << i.matchy << "\t"  << i.matchz << "\t" <<  "\n";
-////        for (auto j: i.camrayids)
-////        {
-////            transformedray r;
-////            r = raydb[std::make_pair(j.camid,j.rayid)];
-////            std::cout << r.x << "\t" << r.y << "\t" << r.z << "\t"  << r.vx << "\t" << r.vy << "\t" << r.vz << "\t\n";
-////        }
-////        std::cout << "\n";
-//    }
-    
+
+    return candidatematches;
+}
+
+std::vector<candidatematch> SelectApprovedMatchesFromSortedCandidates(const std::vector<candidatematch>& candidatematches,
+                                                                      int maxmatchesperray,
+                                                                      double maxdistance,
+                                                                      double multiplematchesperraymindistance,
+                                                                      STMFrameTiming* timing_out,
+                                                                      bool verbose) {
+    const bool profile = (timing_out != nullptr);
+    stm_clock::time_point t0;
     if (profile) {
         t0 = stm_clock::now();
     }
-    // Select best matches from candidates
-    std::cout << "Selecting the best matches with upto " << maxmatchesperray << " match(es)/ray out of " << candidates.size() <<" candidates\n";
+    if (verbose) {
+        std::cout << "Selecting the best matches with upto " << maxmatchesperray << " match(es)/ray out of "
+                  << candidatematches.size() << " candidates\n";
+    }
     std::vector<candidatematch> approvedmatches;
-    std::map<std::pair<long, long>,int> matchcounter;
-    std::map<std::pair<long, long>,std::vector<candidatematch>> approvedmatches_per_ray;
+    std::map<std::pair<long, long>, int> matchcounter;
+    std::map<std::pair<long, long>, std::vector<candidatematch>> approvedmatches_per_ray;
     unsigned int removed_because_sphere = 0;
     approvedmatches.clear();
     matchcounter.clear();
     bool valid;
     int matches;
-    for(candidatematch cand: candidatematches)
-    {
-        if(cand.matcherror < maxdistance)
-        {
+    for (candidatematch cand : candidatematches) {
+        if (cand.matcherror < maxdistance) {
             valid = true;
-            for(auto camrayid: cand.camrayids)
-            {
+            for (auto camrayid : cand.camrayids) {
                 std::pair<long, long> idpair;
-                idpair = std::make_pair(camrayid.camid,camrayid.rayid);
-                if(!(matchcounter.find(idpair) == matchcounter.end())) // If it exists
-                {
-                    // If there are more than maxmatchesperray for this ray, valid=false
+                idpair = std::make_pair(camrayid.camid, camrayid.rayid);
+                if (!(matchcounter.find(idpair) == matchcounter.end())) {
                     matches = matchcounter[idpair];
-                    if(matches >= maxmatchesperray)
-                    {
+                    if (matches >= maxmatchesperray) {
                         valid = false;
                         break;
                     }
 
-                    // If there is another match for this ray in the exclusion sphere, valid=false
-                    for(auto othermatch: approvedmatches_per_ray[idpair])
-                    {
-                        double distance = sqrt(pow(cand.matchx-othermatch.matchx, 2) + pow(cand.matchy-othermatch.matchy, 2) + pow(cand.matchz-othermatch.matchz, 2));
-                        if (distance < multiplematchesperraymindistance)
-                        {
+                    for (auto othermatch : approvedmatches_per_ray[idpair]) {
+                        double distance = sqrt(pow(cand.matchx - othermatch.matchx, 2) +
+                                               pow(cand.matchy - othermatch.matchy, 2) +
+                                               pow(cand.matchz - othermatch.matchz, 2));
+                        if (distance < multiplematchesperraymindistance) {
                             valid = false;
                             removed_because_sphere++;
                             break;
                         }
                     }
-                    if (!valid)
-                    {
+                    if (!valid) {
                         break;
                     }
-                    
                 }
             }
-            if(valid)
-            {
-                // Add to approved matches
-                for(auto camrayid: cand.camrayids)  // Add match counter
-                {
+            if (valid) {
+                for (auto camrayid : cand.camrayids) {
                     std::pair<long, long> idpair;
-                    idpair = std::make_pair(camrayid.camid,camrayid.rayid);
-                    if(matchcounter.find(idpair) == matchcounter.end())                     // If does not exists
-                    {
-                       matchcounter.insert(std::pair<std::pair<long,long>,int>(idpair,1));  // Add to counter
-                       std::vector<candidatematch> v;
-                       v.push_back(cand);
-                       approvedmatches_per_ray.insert(std::pair<std::pair<long,long>, std::vector<candidatematch>>(idpair, v));
-                    }
-                    else
-                    {
-                        matchcounter[idpair]++;                                            // Increment counter
+                    idpair = std::make_pair(camrayid.camid, camrayid.rayid);
+                    if (matchcounter.find(idpair) == matchcounter.end()) {
+                        matchcounter.insert(std::pair<std::pair<long, long>, int>(idpair, 1));
+                        std::vector<candidatematch> v;
+                        v.push_back(cand);
+                        approvedmatches_per_ray.insert(
+                            std::pair<std::pair<long, long>, std::vector<candidatematch>>(idpair, v));
+                    } else {
+                        matchcounter[idpair]++;
                         approvedmatches_per_ray[idpair].push_back(cand);
                     }
                 }
@@ -830,34 +773,47 @@ std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& rayda
     }
     if (profile) {
         timing_out->select_approved_ms += stm_elapsed_ms(t0);
-        timing_out->matching_total_ms = stm_elapsed_ms(t_match0);
     }
-    
-    std::cout << "Selecting done. " << approvedmatches.size() << " matched found (out of " << candidates.size() << " candidates)\n";
-    if (multiplematchesperraymindistance > 0.0)
-    {
-        std::cout << "Matches remove because of minimum distance for multiple matches per ray " << removed_because_sphere << std::endl;
-        std::cout << "Minimum distance for multiple matches per ray is " << multiplematchesperraymindistance << std::endl;
-    }
-    else
-    {
-        if (removed_because_sphere != 0)
-        {
-            std::cout << "****** BUG ******: removed_because_sphere should be 0 !!" << std::endl;
+
+    if (verbose) {
+        std::cout << "Selecting done. " << approvedmatches.size() << " matched found (out of " << candidatematches.size()
+                  << " candidates)\n";
+        if (multiplematchesperraymindistance > 0.0) {
+            std::cout << "Matches remove because of minimum distance for multiple matches per ray " << removed_because_sphere
+                      << std::endl;
+            std::cout << "Minimum distance for multiple matches per ray is " << multiplematchesperraymindistance
+                      << std::endl;
+        } else {
+            if (removed_because_sphere != 0) {
+                std::cout << "****** BUG ******: removed_because_sphere should be 0 !!" << std::endl;
+            }
         }
     }
-    
-//    for(auto i: approvedmatches)
-//    {
-//        std::cout << "Approved match: ";
-//        for (auto j: i.camrayids)
-//        {
-//            std::cout << j.camid << "." <<j .rayid << "\t";
-//        }
-//        std::cout << "\t| "  << i.matcherror << "\n";
-//    }
-    
-    return(approvedmatches);
+
+    return approvedmatches;
+}
+
+std::vector<candidatematch> SpaceTraversalMatching(const std::vector<ray>& raydata,
+                                                   const boundingboxspec& bb,
+                                                   const std::vector<std::vector<double>>& bounds,
+                                                   int maxmatchesperray,
+                                                   unsigned int mincameras,
+                                                   double maxdistance,
+                                                   double multiplematchesperraymindistance,
+                                                   STMFrameTiming* timing_out) {
+    const bool profile = (timing_out != nullptr);
+    stm_clock::time_point t_match0;
+    if (profile) {
+        t_match0 = stm_clock::now();
+    }
+    std::vector<candidatematch> candidatematches =
+        SpaceTraversalMatchingCandidatesOnly(raydata, bb, bounds, mincameras, timing_out, true);
+    std::vector<candidatematch> approvedmatches = SelectApprovedMatchesFromSortedCandidates(
+        candidatematches, maxmatchesperray, maxdistance, multiplematchesperraymindistance, timing_out, true);
+    if (profile) {
+        timing_out->matching_total_ms = stm_elapsed_ms(t_match0);
+    }
+    return approvedmatches;
 }
 
 void init(){

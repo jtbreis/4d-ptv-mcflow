@@ -21,18 +21,22 @@
 #include "CLI11.hpp"
 
 #include "import_rays_h5.h"
+#include "STM_spatial_boxes.h"
 
 namespace {
 double stm_elapsed_ms(std::chrono::steady_clock::time_point t0) {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 
-void print_stm_timing_mean(const STMFrameTiming& a, unsigned int nframes) {
+void print_stm_timing_mean(const STMFrameTiming& a, unsigned int nframes, bool spatial_boxes) {
     if (nframes == 0) {
         return;
     }
     const double n = static_cast<double>(nframes);
     std::cout << "\n[STM --timing] mean ms per frame (steady_clock):\n";
+    if (spatial_boxes) {
+        std::cout << "  (spatial-boxes: per-stage = max across sub-volumes, not sum; sums would inflate parallel work.)\n";
+    }
     std::cout << std::fixed << std::setprecision(3);
     std::cout << "  import_rays:               " << a.import_rays_ms / n << "\n";
     std::cout << "  prepare_rays:              " << a.prepare_rays_ms / n << "\n";
@@ -63,7 +67,9 @@ static void stm_process_one_frame(
     bool save_hdf5,
     std::ofstream& streamout,
     STM_File& stm_file,
-    STMFrameTiming* frame_timing)
+    STMFrameTiming* frame_timing,
+    unsigned int spatial_boxes,
+    unsigned int spatial_overlap_cells)
 {
     H5::H5File rayfile(inputfile, H5F_ACC_RDONLY);
 
@@ -77,12 +83,16 @@ static void stm_process_one_frame(
     }
 
     STMFrameTiming* match_timing = frame_timing;
-    auto results = SpaceTraversalMatching(rays, bb, bounds,
-                                          maxmatchesperray,
-                                          mincameras,
-                                          maxdistance,
-                                          multiplematchesperraymindistance,
-                                          match_timing);
+    std::vector<candidatematch> results;
+    if (spatial_boxes > 0) {
+        results = SpaceTraversalMatchingSpatialBoxes(
+            rays, bb, static_cast<int>(spatial_boxes), static_cast<int>(spatial_overlap_cells),
+            static_cast<int>(maxmatchesperray), mincameras, maxdistance, multiplematchesperraymindistance,
+            match_timing, true);
+    } else {
+        results = SpaceTraversalMatching(rays, bb, bounds, maxmatchesperray, mincameras, maxdistance,
+                                         multiplematchesperraymindistance, match_timing);
+    }
 
     std::chrono::steady_clock::time_point t_wr;
     if (frame_timing) {
@@ -120,7 +130,7 @@ static void stm_process_one_frame(
     }
 }
 
-void do_STM(const std::string input_dir, const std::string filename, const unsigned int maxframes, const unsigned int mincameras, const double maxdistance, const double multiplematchesperraymindistance, const unsigned int maxmatchesperray, const struct boundingboxspec &bb, bool save_hdf5, bool save_bin, std::string output_dir, bool enable_timing) {
+void do_STM(const std::string input_dir, const std::string filename, const unsigned int maxframes, const unsigned int mincameras, const double maxdistance, const double multiplematchesperraymindistance, const unsigned int maxmatchesperray, const struct boundingboxspec &bb, bool save_hdf5, bool save_bin, std::string output_dir, bool enable_timing, unsigned int spatial_boxes, unsigned int spatial_overlap_cells, unsigned int frame_parallelism) {
     std::string inputfile = input_dir + '/' + filename;
     // Print parameters
     std::cout << "Input file: " << inputfile << std::endl;
@@ -131,6 +141,10 @@ void do_STM(const std::string input_dir, const std::string filename, const unsig
     std::cout << "ny: " << bb.ny << std::endl;
     std::cout << "nz: " << bb.nz << std::endl;
     std::cout << "bounding box: " << bb.xmin << "," << bb.xmax << "," << bb.ymin << "," << bb.ymax << "," << bb.zmin << "," << bb.zmax << std::endl;
+    if (spatial_boxes > 0) {
+        std::cout << "spatial-boxes: " << spatial_boxes << ", overlap (global voxels per face): " << spatial_overlap_cells
+                  << " (set OMP_NUM_THREADS >= spatial-boxes for full parallelism)\n";
+    }
 
     // Go
     std::clock_t tstart = clock();
@@ -196,13 +210,21 @@ void do_STM(const std::string input_dir, const std::string filename, const unsig
         frames_wall0 = std::chrono::steady_clock::now();
     }
 
-    #pragma omp parallel for schedule(dynamic)
+    int frame_threads = (frame_parallelism == 0) ? omp_get_max_threads() : static_cast<int>(frame_parallelism);
+    if (frame_threads < 1) {
+        frame_threads = 1;
+    }
+    std::cout << "frame-parallelism: " << frame_threads << " concurrent frame(s) (outer OpenMP team; OMP_NUM_THREADS="
+              << omp_get_max_threads() << ")\n";
+
+    #pragma omp parallel for schedule(dynamic) num_threads(frame_threads)
     for (int currentframe = 0; currentframe < (int)maxframes; currentframe++) {
         STMFrameTiming frame_tim;
         STMFrameTiming* ft_ptr = enable_timing ? &frame_tim : nullptr;
         stm_process_one_frame(currentframe, inputfile, bb, bounds,
                                 maxmatchesperray, mincameras, maxdistance, multiplematchesperraymindistance,
-                                save_bin, save_hdf5, streamout, stm_file, ft_ptr);
+                                save_bin, save_hdf5, streamout, stm_file, ft_ptr, spatial_boxes,
+                                spatial_overlap_cells);
         if (enable_timing) {
             #pragma omp critical(stm_timing_merge)
             {
@@ -222,7 +244,7 @@ void do_STM(const std::string input_dir, const std::string filename, const unsig
             std::chrono::steady_clock::now() - frames_wall0).count();
         std::cout << "\n[STM --timing] frame loop wall: " << wall_s << " s ("
                   << (1000.0 * wall_s / static_cast<double>(maxframes)) << " ms/frame)\n";
-        print_stm_timing_mean(timing_accum, maxframes);
+        print_stm_timing_mean(timing_accum, maxframes, spatial_boxes > 0);
     }
 
     std::clock_t tend = clock();
@@ -251,6 +273,9 @@ int main(int argc, char **argv) {
     bool hdf5{false};
     bool bin{false};
     bool timing{false};
+    unsigned int spatial_boxes{0};
+    unsigned int spatial_overlap_cells{1};
+    unsigned int frame_parallelism{0};
 
     app.add_option("-i,--input", input_file, "Input file")->check(CLI::ExistingFile)->required();
     app.add_option("-o,--output-dir", output_dir, "Output directory");
@@ -268,6 +293,12 @@ int main(int argc, char **argv) {
     app.add_flag("--hdf5", hdf5, "Save output in HDF5 file");
     app.add_flag("--bin", bin, "Save output in binary file");
     app.add_flag("--timing", timing, "Print per-stage mean timing (ms/frame) at end of run");
+    app.add_option("--spatial-boxes", spatial_boxes,
+                   "Number of disjoint sub-volumes (e.g. match OMP_NUM_THREADS). 0 = single pass (default).");
+    app.add_option("--spatial-overlap", spatial_overlap_cells,
+                   "With --spatial-boxes: expand each sub-box by this many global voxels on each face (clamped). Default 1. 0 = no halo.");
+    app.add_option("--frame-parallelism", frame_parallelism,
+                   "Max frames processed concurrently (OpenMP team size for the outer frame loop). 0 = use OMP_NUM_THREADS.");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -319,7 +350,8 @@ int main(int argc, char **argv) {
         filename = input_file;
     }
 
-    do_STM(input_dir, filename, maxframes, mincameras, maxdistance, multiplematchesperraymindistance, maxmatchesperray, bb, hdf5, bin, output_dir, timing);
+    do_STM(input_dir, filename, maxframes, mincameras, maxdistance, multiplematchesperraymindistance, maxmatchesperray, bb,
+           hdf5, bin, output_dir, timing, spatial_boxes, spatial_overlap_cells, frame_parallelism);
 
     return EXIT_SUCCESS;
 }
