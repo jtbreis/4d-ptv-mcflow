@@ -10,3 +10,6 @@
 [submodule "ptv_weblauncher"]
 	path = ptv_weblauncher
 	url = git@github.com:jtbreis/ptv_weblauncher.git
+[submodule "graph_tracking"]
+	path = graph_tracking
+	url = /workspaces/graph-tracking.git
