@@ -22,6 +22,17 @@ make
 
 Please refer to the [online documentation](https://4d-ptv.readthedocs.io/en/latest/) for more information.
 
+### Use as a submodule
+
+The `minimal` branch contains only the processing pipeline (no docker, web launcher or devcontainer):
+
+```
+git submodule add -b minimal git@github.com:jtbreis/4d-ptv-mcflow.git 4d-ptv-mcflow
+git submodule update --init --recursive
+pip install -e 4d-ptv-mcflow
+make -C 4d-ptv-mcflow/STMCpp
+```
+
 ### Run as devcontainer
 
 '''matlab-proxy-app'''

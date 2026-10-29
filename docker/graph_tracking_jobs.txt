@@ -1,8 +1,0 @@
-# Graph tracking (4-frame, all runs) — one command per line.
-# Run from docker/: ./run_queue.sh [--jobs N] graph_tracking_jobs.txt
-# Requires rays_out_cpp.h5 per run (stereo matching already done).
-#
-# Example:
-# OUTPUT_DIR=/mnt/ssd OUTPUT_BASE=data/Windtunnel_PTV_TNTI/X300cm_PTV_above_TNTI CASE=TNTI_opposing_gravity RUNS=Run1 BOX_SIZE_TRACK=0.2 USE_BIDIRECTIONAL_GRAPH=1 ./docker/graph_tracking_all_runs/run_graph_tracking_all_runs.sh run
-
-# OUTPUT_DIR=/mnt/ssd OUTPUT_BASE=data/Windtunnel_PTV_TNTI/X300cm_PTV_above_TNTI CASE=TNTI_opposing_gravity RUNS=Run1 MAX_BLOCKS=1 BOX_SIZE_TRACK=0.2 ./docker/graph_tracking_all_runs/run_graph_tracking_all_runs.sh run
