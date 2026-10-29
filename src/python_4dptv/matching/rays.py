@@ -1,5 +1,6 @@
 import multiprocessing
 import os
+import stat
 import sys
 import tempfile
 
@@ -18,6 +19,11 @@ from ..io.read_h5 import (
 from .fit_line import fit3dline
 from ..plotting.ray_testing import plot_rays
 from ..utils.structure import Filenames, Folders
+
+try:
+    from ..io.h5_metadata import write_h5_run_metadata
+except ImportError:
+    write_h5_run_metadata = None
 
 
 def _split_frame_ranges(n_frames: int, n_parts: int) -> list[tuple[int, int]]:
@@ -151,6 +157,62 @@ def normalize_image_size_per_camera(image_width, image_height, ncameras, rotate_
                 "its center_rotate is set"
             )
     return w_list, h_list
+
+
+def _normalize_one_centers_threshold_token(tok: str) -> str:
+    t = tok.strip().upper()
+    if t in ("TH1", "TH2"):
+        return t
+    raise ValueError(f"Unknown centers threshold token {tok!r}; use TH1 or TH2")
+
+
+def normalize_centers_threshold_per_camera(spec, ncameras: int) -> list[str]:
+    """
+    Build a length-ncameras list of 'TH1' | 'TH2' for Centers_{TH*} folders.
+
+    spec: None -> all TH1 (legacy Centers/ if present, else Centers_TH1).
+    str 'TH1,TH2,...' -> comma-separated per camera in calib order.
+    list/tuple -> same tokens, length must match ncameras.
+    """
+    if spec is None:
+        return ["TH1"] * ncameras
+    if isinstance(spec, (list, tuple)):
+        if len(spec) != ncameras:
+            raise ValueError(
+                f"centers_threshold list length {len(spec)} != ncameras {ncameras}"
+            )
+        return [_normalize_one_centers_threshold_token(str(x)) for x in spec]
+    if not isinstance(spec, str):
+        raise TypeError(
+            f"centers_threshold spec must be str, list, or None, got {type(spec)}"
+        )
+    s = spec.strip()
+    if not s:
+        return ["TH1"] * ncameras
+    parts = [p.strip() for p in s.split(",")]
+    if len(parts) != ncameras:
+        raise ValueError(
+            f"centers_threshold comma-list has {len(parts)} entries, need {ncameras} "
+            f"(one per camera 0..{ncameras - 1})"
+        )
+    return [_normalize_one_centers_threshold_token(p) for p in parts]
+
+
+def _set_file_readonly(path: str) -> None:
+    """Remove write permission from a file (444)."""
+    os.chmod(path, stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+
+
+def _resolve_camera_center_h5(centers_folder: str, cam_idx: int) -> str:
+    """Return path to Camera*.h5 for calib camera index (0-based)."""
+    for name in (f"Camera{cam_idx + 1}.h5", f"Camera{cam_idx}.h5"):
+        path = os.path.join(centers_folder, name)
+        if os.path.isfile(path):
+            return path
+    raise FileNotFoundError(
+        f"No center file for camera {cam_idx} in {centers_folder} "
+        f"(tried Camera{cam_idx + 1}.h5, Camera{cam_idx}.h5)"
+    )
 
 
 def _rotate_centers_xy_90(frame_data: dict, w: int, h: int, direction: str) -> dict:
@@ -303,13 +365,21 @@ class Rays():
         center_rotate=None,
         image_width=None,
         image_height=None,
+        centers_threshold=None,
+        write_protect=False,
+        output_path=None,
+        run_metadata=None,
     ):
         """
-        path: folder containing Centers/ and where rays will be read/written.
+        path: folder containing Centers_{TH1|TH2}/ (or legacy Centers/) and where
+            rays will be read/written.
         calibration_folder: if set, load calib.h5 from this folder (e.g. test
             Calibration_Before calibration on points from Calibration_After).
         store_xyz_for_plotting: if True, keep full per-plane XYZ (large RAM);
             required only for plot_rays(). Default False to avoid OOM on dense data.
+        centers_threshold: optional per-camera threshold folder selector (TH1 | TH2).
+            None defaults to TH1 for every camera. Comma-separated string or list/tuple
+            of length ncameras; camera i reads from Centers_{TH}/Camera{i+1}.h5.
         center_rotate: optional per-camera remap of center (x,y) as if that camera's
             image were rotated 90° before calibration. Prefer a list/tuple of length
             ncameras with entries None | 'cw' | 'ccw' (camera index matches calib order).
@@ -319,8 +389,13 @@ class Rays():
             Integers apply to every camera that has a non-None center_rotate; or pass
             list/tuple of length ncameras for per-camera width/height. Required when
             any camera uses center_rotate.
+        write_protect: if True, remove write permission from rays.h5 after writing.
+        output_path: if set, write rays.h5 here; centers and calibration still read from path.
         """
         self.path = path
+        self.output_path = output_path if output_path is not None else path
+        self._write_protect = bool(write_protect)
+        self.run_metadata = run_metadata
         calib_path = calibration_folder if calibration_folder is not None else path
         self._calib_path = calib_path
         self.calibration = import_calibration(calib_path)
@@ -332,6 +407,9 @@ class Rays():
         )
         self._image_w_list, self._image_h_list = normalize_image_size_per_camera(
             image_width, image_height, self.ncameras, self._center_rotate
+        )
+        self._centers_threshold = normalize_centers_threshold_per_camera(
+            centers_threshold, self.ncameras
         )
 
         self._center_files = self._discover_center_files()
@@ -347,16 +425,45 @@ class Rays():
 
         self._output_written = False
 
+    def _finalize_output_file(self, out_path: str) -> None:
+        if write_h5_run_metadata is not None and self.run_metadata:
+            meta = dict(self.run_metadata)
+            meta.setdefault("job_id", "compute_rays")
+            params = dict(meta.get("parameters") or {})
+            params.update({
+                "ncameras": self.ncameras,
+                "centers_threshold": self._centers_threshold,
+                "center_rotate": self._center_rotate,
+                "image_width": self._image_w_list,
+                "image_height": self._image_h_list,
+                "write_protect": self._write_protect,
+                "centers_path": os.path.abspath(self.path),
+                "output_path": os.path.abspath(self.output_path),
+                "calibration_path": os.path.abspath(self._calib_path),
+            })
+            meta["parameters"] = params
+            write_h5_run_metadata(out_path, meta)
+        if self._write_protect and os.path.isfile(out_path):
+            _set_file_readonly(out_path)
+            print(f"[rays] Write-protected {out_path}", flush=True)
+
     def _discover_center_files(self):
-        folder = self.path + Folders.CENTERS.value
-        if not os.path.isdir(folder):
-            raise FileNotFoundError(f"Centers folder not found: {folder}")
-        files = sorted(f for f in os.listdir(folder) if f.endswith(".h5"))
-        if len(files) != self.ncameras:
-            raise ValueError(
-                f"Expected {self.ncameras} Centers/*.h5 files, found {len(files)} in {folder}"
-            )
-        return [os.path.join(folder, f) for f in files]
+        legacy = self.path + Folders.CENTERS.value
+        use_legacy = all(t == "TH1" for t in self._centers_threshold) and os.path.isdir(
+            legacy
+        )
+        if use_legacy:
+            files = sorted(f for f in os.listdir(legacy) if f.endswith(".h5"))
+            if len(files) == self.ncameras:
+                return [os.path.join(legacy, f) for f in files]
+
+        paths = []
+        for cam_idx, th in enumerate(self._centers_threshold):
+            folder = os.path.join(self.path, f"Centers_{th}")
+            if not os.path.isdir(folder):
+                raise FileNotFoundError(f"Centers folder not found: {folder}")
+            paths.append(_resolve_camera_center_h5(folder, cam_idx))
+        return paths
 
     def load_centers(self):
         """Load all center frames into memory (legacy; avoid for large datasets)."""
@@ -385,7 +492,7 @@ class Rays():
         """Read centers → compute → rays.h5. All frames (or first max_frames); optional parallel chunks."""
         if flush_every < 1:
             raise ValueError("flush_every must be >= 1")
-        out_path = self.path + Filenames.RAYS.value
+        out_path = self.output_path + Filenames.RAYS.value
         out_dir = os.path.dirname(out_path) or "."
         os.makedirs(out_dir, exist_ok=True)
 
@@ -549,6 +656,7 @@ class Rays():
                     )
 
         self._output_written = True
+        self._finalize_output_file(out_path)
 
     def _compute_rays_accumulate(self, max_frames=None):
         """Keep xyz0/dd in memory for write_rays() later; never loads all centers at once."""
@@ -728,7 +836,7 @@ class Rays():
             raise RuntimeError(
                 "No ray data to write; call compute_rays() first.")
 
-        out_path = self.path + Filenames.RAYS.value
+        out_path = self.output_path + Filenames.RAYS.value
         os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
         with h5py.File(out_path, "w") as fout:
@@ -747,3 +855,4 @@ class Rays():
                         self.mass[cam][frame_idx],
                     )
         self._output_written = True
+        self._finalize_output_file(out_path)

@@ -14,11 +14,15 @@
 #   docker compose -f docker/stereo_matching_all_runs/docker-compose.yml build
 #   OUTPUT_DIR=/path/to/data docker compose -f docker/stereo_matching_all_runs/docker-compose.yml run --rm stereo_matching -- --case TTI_no_gravity
 #
-# Env: DOCKER (optional: full path to docker binary; otherwise auto-detected), OUTPUT_DIR, CASE, RUNS, OUTPUT_BASE, N_THREADS,
+# Env: DOCKER, INPUT_DIR, INPUT_BASE, OUTPUT_DIR, OUTPUT_BASE, CASE, RUNS, N_THREADS,
 #      MIN_CAMERAS, MAX_DISTANCE, MULTIPLE_MATCHES_PER_RAY_DISTANCE, MAX_MATCHES_PER_RAY,
 #      NVOXELS, BOUNDING_BOX, DETACHED, IMAGE_NAME,
 #      TIMING (set to 1 for STM --timing),
-#      SPATIAL_BOXES, SPATIAL_OVERLAP_CELLS, FRAME_PARALLELISM (passed to STM via Python wrapper)
+#      SPATIAL_BOXES, SPATIAL_OVERLAP_CELLS, FRAME_PARALLELISM (passed to STM via Python wrapper),
+#      MAX_FRAMES (only process the first N frames; leave unset for all),
+#      RESUME (set to 1 to keep existing rays_out_cpp.h5 and skip completed frames),
+#      NO_WRITE_PARTICLE_PROPS (1 to skip diameter/intensity/mass in rays_out_cpp.h5),
+#      NO_WRITE_DIAMETER, NO_WRITE_INTENSITY, NO_WRITE_MASS (1 to omit individual datasets)
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,20 +61,27 @@ export IMAGE_NAME
 OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/data}"
 export OUTPUT_DIR
 
+# shellcheck source=docker/resolve_data_paths.sh
+source "$REPO_ROOT/docker/resolve_data_paths.sh"
+# shellcheck source=docker/ptv_compose_run.sh
+source "$REPO_ROOT/docker/ptv_compose_run.sh"
+
 build() {
   echo "Building image: $IMAGE_NAME (stereo matching, all runs)"
   "$DOCKER" compose -f "$COMPOSE_FILE" build
 }
 
 run_container() {
-  echo "Mounts: data (output) -> $OUTPUT_DIR"
-  echo "  Expects {OUTPUT_BASE:-data/PTV_center}/{case}/{run}/rays.h5 (run compute rays first)."
-  echo "Running stereo matching (all runs)${CASE:+ case=$CASE}${OUTPUT_BASE:+ output_base=$OUTPUT_BASE}${N_THREADS:+ threads=$N_THREADS}${SPATIAL_BOXES:+ spatial_boxes=$SPATIAL_BOXES}${FRAME_PARALLELISM:+ frame_parallelism=$FRAME_PARALLELISM}${DETACHED:+ (detached)}"
-  "$DOCKER" compose -f "$COMPOSE_FILE" run --rm ${DETACHED:+-d} \
-    stereo_matching \
+  _resolve_data_paths
+  echo "Mounts: input (read) -> $INPUT_DIR  |  output (write) -> $OUTPUT_DIR"
+  echo "  Read:  {INPUT_BASE}/{case}/{run}/rays.h5"
+  echo "  Write: {OUTPUT_BASE}/{case}/{run}/rays_out_cpp.h5"
+  echo "Running stereo matching (all runs)${CASE:+ case=$CASE}${N_THREADS:+ threads=$N_THREADS}${MAX_FRAMES:+ max_frames=$MAX_FRAMES}${RESUME:+ resume}${SPATIAL_BOXES:+ spatial_boxes=$SPATIAL_BOXES}${FRAME_PARALLELISM:+ frame_parallelism=$FRAME_PARALLELISM}${DETACHED:+ (detached)}${PTV_CONTAINER_NAME:+ name=$PTV_CONTAINER_NAME}"
+  ptv_compose_run "$COMPOSE_FILE" stereo_matching \
     ${CASE:+--case "$CASE"} \
     ${RUNS:+--runs "$RUNS"} \
-    ${OUTPUT_BASE:+--output-base "$OUTPUT_BASE"} \
+    --input-base "$CONTAINER_INPUT_BASE" \
+    --output-base "$CONTAINER_OUTPUT_BASE" \
     ${N_THREADS:+--threads "$N_THREADS"} \
     ${MIN_CAMERAS:+--min-cameras "$MIN_CAMERAS"} \
     ${MAX_DISTANCE:+--max-distance "$MAX_DISTANCE"} \
@@ -81,7 +92,13 @@ run_container() {
     ${TIMING:+--timing} \
     ${SPATIAL_BOXES:+--spatial-boxes "$SPATIAL_BOXES"} \
     ${SPATIAL_OVERLAP_CELLS:+--spatial-overlap "$SPATIAL_OVERLAP_CELLS"} \
-    ${FRAME_PARALLELISM:+--frame-parallelism "$FRAME_PARALLELISM"}
+    ${FRAME_PARALLELISM:+--frame-parallelism "$FRAME_PARALLELISM"} \
+    ${MAX_FRAMES:+--max-frames "$MAX_FRAMES"} \
+    ${RESUME:+--resume} \
+    ${NO_WRITE_PARTICLE_PROPS:+--no-write-particle-props} \
+    ${NO_WRITE_DIAMETER:+--no-write-diameter} \
+    ${NO_WRITE_INTENSITY:+--no-write-intensity} \
+    ${NO_WRITE_MASS:+--no-write-mass}
 }
 
 case "${1:-}" in
@@ -98,7 +115,7 @@ case "${1:-}" in
     echo "Usage: $0 {build|run} [--detached | -d]"
     echo "  build  Build stereo-matching (all runs) image"
     echo "  run    Run stereo matching for all runs"
-    echo "Env: OUTPUT_DIR, CASE, RUNS, OUTPUT_BASE, N_THREADS, MIN_CAMERAS, MAX_DISTANCE, MULTIPLE_MATCHES_PER_RAY_DISTANCE, MAX_MATCHES_PER_RAY, NVOXELS, BOUNDING_BOX, DETACHED, TIMING, SPATIAL_BOXES, SPATIAL_OVERLAP_CELLS, FRAME_PARALLELISM"
+    echo "Env: INPUT_DIR, INPUT_BASE, OUTPUT_DIR, OUTPUT_BASE, CASE, RUNS, N_THREADS, MIN_CAMERAS, MAX_DISTANCE, MULTIPLE_MATCHES_PER_RAY_DISTANCE, MAX_MATCHES_PER_RAY, NVOXELS, BOUNDING_BOX, DETACHED, TIMING, SPATIAL_BOXES, SPATIAL_OVERLAP_CELLS, FRAME_PARALLELISM, MAX_FRAMES, RESUME, NO_WRITE_PARTICLE_PROPS, NO_WRITE_DIAMETER, NO_WRITE_INTENSITY, NO_WRITE_MASS"
     exit 1
     ;;
 esac

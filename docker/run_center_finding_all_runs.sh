@@ -19,6 +19,9 @@ IMAGE_NAME="${IMAGE_NAME:-4d-ptv-center-finding-all-runs}"
 RAW_DATA_DIR="${RAW_DATA_DIR:-$REPO_ROOT/raw_data}"
 OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/data}"
 
+# shellcheck source=docker/shareddata-docker-args.sh
+source "$REPO_ROOT/docker/shareddata-docker-args.sh"
+
 build() {
   echo "Building image: $IMAGE_NAME (center finding, all runs)"
   docker build -f "$SCRIPT_DIR/Dockerfile.center_finding_all_runs" -t "$IMAGE_NAME" "$REPO_ROOT"
@@ -29,6 +32,7 @@ run_container() {
   echo "  (In container, output is written to .../data/PTV_center/{case}/RunX/; on host that is $OUTPUT_DIR/PTV_center/{case}/RunX/)"
   echo "Running center finding (all runs)${CASE:+ case=$CASE}${DATASET:+ dataset=$DATASET}${DETACHED:+ (detached)}"
   docker run --rm ${DETACHED:+-d} \
+    "${SHAREDDATA_DOCKER_ARGS[@]}" \
     -v "$RAW_DATA_DIR:/workspaces/4d-ptv-mcflow/raw_data:ro" \
     -v "$OUTPUT_DIR:/workspaces/4d-ptv-mcflow/data" \
     "$IMAGE_NAME" \

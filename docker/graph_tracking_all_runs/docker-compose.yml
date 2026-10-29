@@ -1,0 +1,24 @@
+# Build from repo root (Dockerfile COPY expects full tree).
+# Run: docker compose run --rm graph_tracking -- --case TNTI_opposing_gravity
+# Env for mounts: OUTPUT_DIR, INPUT_DIR (optional read-only input mount).
+
+services:
+  graph_tracking:
+    build:
+      context: ../..
+      dockerfile: docker/graph_tracking_all_runs/Dockerfile.graph_tracking_all_runs
+    image: ${IMAGE_NAME:-4d-ptv-graph-tracking-all-runs}
+    user: appuser
+    group_add:
+      - "1500"
+    volumes:
+      - type: bind
+        source: ${OUTPUT_DIR:-../../data}
+        target: /workspaces/4d-ptv-mcflow/data
+      - type: bind
+        source: ${INPUT_DIR:-${OUTPUT_DIR:-../../data}}
+        target: /workspaces/4d-ptv-mcflow/input
+        read_only: true
+    environment:
+      TRACKING_QUIET: ${TRACKING_QUIET:-}
+      PTV_WEBLAUNCHER: ${PTV_WEBLAUNCHER:-}

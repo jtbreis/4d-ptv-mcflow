@@ -24,6 +24,11 @@ RUN /opt/venv/bin/pip install .
 ENV PATH="/opt/venv/bin:$PATH"
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
-ENTRYPOINT ["python3", "Post-Processing/sensitivity_initial_box_x_tracking.py"]
+COPY docker/docker-entrypoint-umask.sh /usr/local/bin/docker-entrypoint-umask.sh
+COPY docker/setup-shareddata-user.sh /tmp/setup-shareddata-user.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint-umask.sh \
+    && bash /tmp/setup-shareddata-user.sh && rm /tmp/setup-shareddata-user.sh
+USER appuser
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint-umask.sh", "python3", "Post-Processing/sensitivity_initial_box_x_tracking.py"]
 CMD ["--dataset", "/workspaces/4d-ptv-mcflow/data/tracking_test_threshold1", \
      "--output-dir", "/workspaces/4d-ptv-mcflow/data/sensitivity_initial_box_x/tracking_test_threshold1"]

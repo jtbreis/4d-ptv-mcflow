@@ -47,8 +47,15 @@ class STM_File {
         // Instance methods
         void open(std::string filename);
         void open(std::string filename, const unsigned int maxframes, const unsigned int mincameras, const double maxdistance, const unsigned int maxmatchesperray, const unsigned int nx, const unsigned int ny, const unsigned int nz);
+        /** Open existing file RDWR for resume, or create/truncate if missing. */
+        void open_or_resume(std::string filename, const unsigned int maxframes, const unsigned int mincameras, const double maxdistance, const unsigned int maxmatchesperray, const unsigned int nx, const unsigned int ny, const unsigned int nz, bool resume);
+        /** True if /frameNNNNN exists with xyze + camrayids datasets. */
+        bool frame_is_complete(unsigned int frameno) const;
+        /** Count complete frame groups in [0, maxframes). */
+        unsigned int count_complete_frames(unsigned int maxframes) const;
+        static std::string frame_group_path(unsigned int frameno);
         void flush();
-        void write_matches(const unsigned int frameno, std::vector<candidatematch> &matches);
+        void write_matches(const unsigned int frameno, std::vector<candidatematch> &matches, bool write_cylinder_aux = false);
         std::vector<candidatematch> read_matches(const unsigned int frameno);
         void set_last_frame(const unsigned int maxframes);
 };

@@ -28,6 +28,9 @@ settings.json
 
 /data
 /raw_data
+/processed_data
+
+/notebook
 
 # Distribution / packaging
 *.egg-info/
@@ -35,3 +38,5 @@ settings.json
 dist/
 build/
 *.pyc
+# Script debug output
+scripts/out/

@@ -22,9 +22,11 @@
 #   docker compose -f docker/compute_rays_all_runs/docker-compose.yml build
 #   OUTPUT_DIR=/path/to/data docker compose -f docker/compute_rays_all_runs/docker-compose.yml run --rm compute_rays -- --case TTI_no_gravity
 #
-# Env: DOCKER (optional: full path to docker binary; otherwise auto-detected), OUTPUT_DIR, CASE, RUNS, OUTPUT_BASE,
+# Env: DOCKER, INPUT_DIR, INPUT_BASE, OUTPUT_DIR, OUTPUT_BASE, CASE, RUNS,
 #   H5_FLUSH_EVERY, N_WORKERS, DETACHED, IMAGE_NAME,
-#   RAYS_CENTER_ROTATE, RAYS_IMAGE_WIDTH, RAYS_IMAGE_HEIGHT
+#   RAYS_CENTER_ROTATE, RAYS_IMAGE_WIDTH, RAYS_IMAGE_HEIGHT,
+#   RAYS_CENTERS_THRESHOLD (comma-separated TH1|TH2 per camera),
+#   RAYS_WRITE_PROTECT (1 to chmod rays.h5 read-only after write)
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -66,25 +68,34 @@ export IMAGE_NAME
 OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/data}"
 export OUTPUT_DIR
 
+# shellcheck source=docker/resolve_data_paths.sh
+source "$REPO_ROOT/docker/resolve_data_paths.sh"
+# shellcheck source=docker/ptv_compose_run.sh
+source "$REPO_ROOT/docker/ptv_compose_run.sh"
+
 build() {
   echo "Building image: $IMAGE_NAME (compute rays, all runs)"
   "$DOCKER" compose -f "$COMPOSE_FILE" build
 }
 
 run_container() {
-  echo "Mounts: data (output) -> $OUTPUT_DIR"
-  echo "  Expects {OUTPUT_BASE:-data/PTV_center}/{case}/{run}/Centers/ (OUTPUT_BASE+CASE, same layout as center finding)."
-  echo "Running compute rays (all runs)${CASE:+ case=$CASE}${H5_FLUSH_EVERY:+ flush_every=$H5_FLUSH_EVERY}${N_WORKERS:+ n_workers=$N_WORKERS}${RAYS_CENTER_ROTATE:+ center_rotate=$RAYS_CENTER_ROTATE}${DETACHED:+ (detached)}"
-  "$DOCKER" compose -f "$COMPOSE_FILE" run --rm ${DETACHED:+-d} \
-    compute_rays \
+  _resolve_data_paths
+  echo "Mounts: input (read) -> $INPUT_DIR  |  output (write) -> $OUTPUT_DIR"
+  echo "  Read:  {INPUT_BASE}/{case}/{run}/Centers_TH1/ and/or Centers_TH2/"
+  echo "  Write: {OUTPUT_BASE}/{case}/{run}/rays.h5"
+  echo "Running compute rays (all runs)${CASE:+ case=$CASE}${H5_FLUSH_EVERY:+ flush_every=$H5_FLUSH_EVERY}${N_WORKERS:+ n_workers=$N_WORKERS}${RAYS_CENTER_ROTATE:+ center_rotate=$RAYS_CENTER_ROTATE}${RAYS_CENTERS_THRESHOLD:+ centers_threshold=$RAYS_CENTERS_THRESHOLD}${RAYS_WRITE_PROTECT:+ write_protect=$RAYS_WRITE_PROTECT}${DETACHED:+ (detached)}${PTV_CONTAINER_NAME:+ name=$PTV_CONTAINER_NAME}"
+  ptv_compose_run "$COMPOSE_FILE" compute_rays \
     ${CASE:+--case "$CASE"} \
     ${RUNS:+--runs "$RUNS"} \
-    ${OUTPUT_BASE:+--output-base "$OUTPUT_BASE"} \
+    --input-base "$CONTAINER_INPUT_BASE" \
+    --output-base "$CONTAINER_OUTPUT_BASE" \
     ${H5_FLUSH_EVERY:+--flush-every "$H5_FLUSH_EVERY"} \
     ${N_WORKERS:+--n-workers "$N_WORKERS"} \
     ${RAYS_CENTER_ROTATE:+--center-rotate "$RAYS_CENTER_ROTATE"} \
     ${RAYS_IMAGE_WIDTH:+--image-width "$RAYS_IMAGE_WIDTH"} \
-    ${RAYS_IMAGE_HEIGHT:+--image-height "$RAYS_IMAGE_HEIGHT"}
+    ${RAYS_IMAGE_HEIGHT:+--image-height "$RAYS_IMAGE_HEIGHT"} \
+    ${RAYS_CENTERS_THRESHOLD:+--centers-threshold "$RAYS_CENTERS_THRESHOLD"} \
+    ${RAYS_WRITE_PROTECT:+--write-protect}
 }
 
 case "${1:-}" in
@@ -101,7 +112,7 @@ case "${1:-}" in
     echo "Usage: $0 {build|run} [--detached | -d]"
     echo "  build  Build compute-rays (all runs) image"
     echo "  run    Compute rays for all runs"
-    echo "Env: OUTPUT_DIR, CASE, RUNS, OUTPUT_BASE, H5_FLUSH_EVERY, N_WORKERS, DETACHED, IMAGE_NAME, RAYS_* (see script header)"
+    echo "Env: INPUT_DIR, INPUT_BASE, OUTPUT_DIR, OUTPUT_BASE, CASE, RUNS, H5_FLUSH_EVERY, N_WORKERS, DETACHED, IMAGE_NAME, RAYS_* (see script header)"
     exit 1
     ;;
 esac

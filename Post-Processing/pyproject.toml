@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ptv-check-tracking"
+version = "0.1.0"
+description = "Sanity checks for PTV tracking h5part output"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "h5py",
+    "matplotlib",
+    "scipy",
+]
+
+[tool.setuptools]
+py-modules = ["check_tracking"]

@@ -6,7 +6,7 @@ from python_4dptv.matching.rays import Rays
 
 os.chdir('/workspaces/4d-ptv-mcflow')
 
-folder = '/workspaces/4d-ptv-mcflow/raw_data/low_threshold/PTV_above/TTI_no_gravity/Run1'
+folder = '/workspaces/4d-ptv-mcflow/raw_data/low_threshold/PTV_above/TTI_opposing_gravity/Run1'
 
 # Optional: only the first N frames per camera (None = all).
 max_frames = 12

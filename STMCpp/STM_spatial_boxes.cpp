@@ -123,7 +123,7 @@ std::vector<candidatematch> dedupe_matches_by_camrayids(std::vector<candidatemat
     for (size_t i = 0; i < all.size(); ++i) {
         if (out.empty() || !comparecamrayidsidentical(all[i].camrayids, out.back().camrayids)) {
             out.push_back(all[i]);
-        } else if (all[i].matcherror < out.back().matcherror) {
+        } else if (comparecandidatematches(all[i], out.back())) {
             out.back() = all[i];
         }
     }

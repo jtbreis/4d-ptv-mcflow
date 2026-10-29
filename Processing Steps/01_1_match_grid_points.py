@@ -9,8 +9,8 @@ os.chdir('/workspaces/4d-ptv-mcflow')
 # %%
 
 cameras = [1, 2, 3, 4]
-folder_path = '/workspaces/4d-ptv-mcflow/raw_data/2025-11-13-ParticleTracking_AboveTTI/Calibration_Before'
-output_path = 'data/julian/PTV_above'
+folder_path = '/workspaces/4d-ptv-mcflow/raw_data/2026-06-25-Camera_Angle_Test/Calibration'
+output_path = '/workspaces/4d-ptv-mcflow/data/Windtunnel_PTV_TNTI/Calibration_Tests'
 calibration_grid_path = 'PTVcalib/calibration_targets/TSI_5mm_backlight_nX39_nY39.csv'
 
 calibration_method = '4d-ptv'

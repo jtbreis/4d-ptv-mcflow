@@ -33,6 +33,9 @@ CONTAINER_DATA="/workspaces/4d-ptv-mcflow/data"
 DATASET_PATH="${DATASET_PATH:-tracking_test_threshold1}"
 OUTPUT_SUBDIR="${OUTPUT_SUBDIR:-sensitivity_box_size/tracking_test_threshold1}"
 
+# shellcheck source=docker/shareddata-docker-args.sh
+source "$REPO_ROOT/docker/shareddata-docker-args.sh"
+
 build() {
   echo "Building image: $IMAGE_NAME (sensitivity box_size)"
   docker build -f "$SCRIPT_DIR/Dockerfile.sensitivity_box_size" -t "$IMAGE_NAME" "$REPO_ROOT"
@@ -51,6 +54,7 @@ run_container() {
     echo "  tail -f $HOST_LOG_PATH"
   fi
   docker run ${DETACHED:+-d} \
+    "${SHAREDDATA_DOCKER_ARGS[@]}" \
     -v "$OUTPUT_DIR:$CONTAINER_DATA" \
     "$IMAGE_NAME" \
     --dataset "$CONTAINER_DATA/$DATASET_PATH" \

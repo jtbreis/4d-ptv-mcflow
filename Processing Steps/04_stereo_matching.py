@@ -1,16 +1,18 @@
 # %%
+# Line-only STM (default C++ behaviour). For diameter-aware / cylinder STM, see
+# ``04_stereo_matching_cylinder.py`` (requires ``diameter`` in rays.h5).
 import os
 from python_4dptv.matching.stereomatching import StereoMatching
 # %load_ext autoreload
 # %autoreload 2
 
 os.chdir('/workspaces/4d-ptv-mcflow')
-folder = '/workspaces/4d-ptv-mcflow/raw_data/low_threshold/PTV_above/TTI_no_gravity/Run1'
+folder = '/workspaces/4d-ptv-mcflow/raw_data/low_threshold/PTV_above/TTI_opposing_gravity/Run1'
 # Set StereoMatching Parameters
 mincameras = 3
 maxdistance = 0.07
-multiplematchesperraydistance = 0.001
-maxmatchesperray = 100
+multiplematchesperraydistance = 0.01
+maxmatchesperray = 50
 # Number of Voxels in direction [nx, ny, nz]
 nvoxels = [350*2, 550*2, 250*2]
 # Bounding Box [minX, maxX, minY, maxY, minZ, maxZ]
@@ -28,5 +30,8 @@ stereomatching.run_stereomatching(
     spatial_overlap_cells=1,
     # max frames at once (C++ --frame-parallelism); omit or 0 = use OMP_NUM_THREADS (= nthreads here)
     frame_parallelism=2,
+    # particle props from rays.h5 → rays_out_cpp.h5 (defaults: all on)
+    # write_particle_props=False,  # skip diameter/intensity/mass entirely
+    # write_mass=False,            # or disable individual datasets
 )
 # stereomatching.plot_matches()

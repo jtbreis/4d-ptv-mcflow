@@ -5,7 +5,7 @@ from ptv_calib.utils.rename_images import rename_images
 import glob
 
 # %%
-folder = '/workspaces/4d-ptv-mcflow/raw_data/julian/2025-09-11-ParticleTracking/Calibration_After/Camera1'
+folder = '/workspaces/4d-ptv-mcflow/raw_data/2026-06-25-Camera_Angle_Test/Calibration/Camera4'
 
 rename_images(folder_path=folder)
 

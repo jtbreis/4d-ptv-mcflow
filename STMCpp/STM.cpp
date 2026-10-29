@@ -9,12 +9,14 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <cmath>
 #include <math.h>
 #include <map>
 #include <tuple>
 
 #include "STM.h"
 #include "STM_CMatrix.h"
+#include "STM_cylinder.h"
 #include "STM_hdf5.h"
 #include "STM_helpers.h"
 
@@ -41,7 +43,21 @@ bool comparecellvisitbytime(const cellvisit &a, const cellvisit &b)
 
 bool comparecandidatematches(const candidatematch &a, const candidatematch &b) // First sort by number of cams then by match error
 {
-    return(a.camrayids.size() > b.camrayids.size() || (a.camrayids.size() == b.camrayids.size() && a.matcherror < b.matcherror));
+    if (a.camrayids.size() != b.camrayids.size()) {
+        return a.camrayids.size() > b.camrayids.size();
+    }
+    if (a.matcherror != b.matcherror) {
+        return a.matcherror < b.matcherror;
+    }
+    if (stm_cylinder_rank_matches) {
+        if (a.cylinder_pair_depth_sum != b.cylinder_pair_depth_sum) {
+            return a.cylinder_pair_depth_sum > b.cylinder_pair_depth_sum;
+        }
+        if (a.cylinder_min_axis_margin != b.cylinder_min_axis_margin) {
+            return a.cylinder_min_axis_margin > b.cylinder_min_axis_margin;
+        }
+    }
+    return false;
 }
 
 bool comparecamrayidscam(const camrayid &a, const camrayid &b)
@@ -173,6 +189,45 @@ void GenerateCamRayIDPermutations(std::vector<std::vector<camrayid>> Lists, std:
     }
 }
 
+namespace {
+
+double stm_min_cell_edge(const std::vector<std::vector<double>>& bounds) {
+    if (bounds.size() < 3 || bounds[0].size() < 2 || bounds[1].size() < 2 || bounds[2].size() < 2) {
+        return 1e-9;
+    }
+    const double hx =
+        (bounds[0].back() - bounds[0].front()) / static_cast<double>(bounds[0].size() - 1);
+    const double hy =
+        (bounds[1].back() - bounds[1].front()) / static_cast<double>(bounds[1].size() - 1);
+    const double hz =
+        (bounds[2].back() - bounds[2].front()) / static_cast<double>(bounds[2].size() - 1);
+    double h = hx;
+    if (hy < h) {
+        h = hy;
+    }
+    if (hz < h) {
+        h = hz;
+    }
+    return h > 0.0 ? h : 1e-9;
+}
+
+void stm_expand_traversed_face_neighbors(std::vector<traversedcell>& out) {
+    const long len = static_cast<long>(out.size());
+    for (long i = 0; i < len; ++i) {
+        for (const auto& j : neighbours) {
+            traversedcell tc = out[static_cast<size_t>(i)];
+            tc.cellid.xi += j[0];
+            tc.cellid.yi += j[1];
+            tc.cellid.zi += j[2];
+            out.push_back(tc);
+        }
+    }
+    std::sort(out.begin(), out.end(), comparetraversedcell);
+    out.erase(std::unique(out.begin(), out.end(), comparetraversedcellsamecell), out.end());
+}
+
+}  // namespace
+
 std::vector<traversedcell> DirectionalVoxelTraversal(transformedray ray, std::vector<std::vector<double>> bounds)
 {
     std::vector<traversedcell> out;
@@ -252,7 +307,7 @@ std::vector<traversedcell> DirectionalVoxelTraversal(transformedray ray, std::ve
 //            std::cout << i.edgeQ << " " << i.time << " || ";
 //        }
         
-        for(long i = 0; cellvisits.size()-1;i++)
+        for (long i = 0; cellvisits.size() > 1 && i < static_cast<long>(cellvisits.size()) - 1; ++i)
         {
             if(cellvisits[i].edgeQ == true)
             {
@@ -318,9 +373,23 @@ std::vector<traversedcell> DirectionalVoxelTraversal(transformedray ray, std::ve
         // Sort + delete duplicates
         std::sort(out.begin(),out.end(),comparetraversedcell);
         out.erase(unique(out.begin(), out.end(), comparetraversedcellsamecell), out.end());
-        
 
-        
+        if (stm_cylinder_thicken_voxels && std::isfinite(ray.diameter) && ray.diameter > 0.0) {
+            const double hmin = stm_min_cell_edge(bounds);
+            const double R = 0.5 * ray.diameter;
+            int target = static_cast<int>(std::ceil(R / hmin));
+            int extra = target - 1;
+            if (extra < 0) {
+                extra = 0;
+            }
+            if (extra > stm_cylinder_max_extra_shells) {
+                extra = stm_cylinder_max_extra_shells;
+            }
+            for (int t = 0; t < extra; ++t) {
+                stm_expand_traversed_face_neighbors(out);
+            }
+        }
+
         return(out);
     }
 }
@@ -330,6 +399,7 @@ transformedray PrepareRay(ray r, boundingboxspec bb)
     transformedray out;
     out.camid = r.camid;
     out.rayid = r.rayid;
+    out.diameter = r.diameter;
     out.x = r.x;
     out.y = r.y;
     out.z = r.z;
@@ -456,24 +526,57 @@ candidatematch ClosestPointToLines(std::map<std::pair<int, int>,transformedray>&
     //std::cout << sol;
     double error = 0;
     double solminusax, solminusay, solminusaz;
-    double tmpx,tmpy,tmpz;
-    for(int i=0;i<len;i++)            // calculate distances
+    double tmpx, tmpy, tmpz;
+    std::vector<double> perp(static_cast<size_t>(len));
+    std::vector<double> rad(static_cast<size_t>(len), 0.0);
+    for (int i = 0; i < len; i++)  // calculate distances
     {
         transformedray r;
-        r = raydb[std::make_pair(crids[i].camid,crids[i].rayid)];
-        
+        r = raydb[std::make_pair(crids[i].camid, crids[i].rayid)];
+
         solminusax = sol.m_pData[0][0] - r.x;
         solminusay = sol.m_pData[1][0] - r.y;
         solminusaz = sol.m_pData[2][0] - r.z;
-        
+
         tmpx = r.vz * solminusay - r.vy * solminusaz;
         tmpy = solminusaz * r.vx - solminusax * r.vz;
         tmpz = solminusax * r.vy - solminusay * r.vx;
-        
-        error += tmpx*tmpx + tmpy*tmpy + tmpz*tmpz;
+
+        const double cross2 = tmpx * tmpx + tmpy * tmpy + tmpz * tmpz;
+        error += cross2;
+        perp[static_cast<size_t>(i)] = std::sqrt(cross2);
+        const double halfd = 0.5 * r.diameter;
+        rad[static_cast<size_t>(i)] =
+            (std::isfinite(halfd) && halfd > 0.0) ? halfd : 0.0;
     }
-    error = sqrt(error/len);
-    
+    error = sqrt(error / len);
+
+    double min_margin = 0.0;
+    if (len > 0) {
+        min_margin = rad[0] - perp[0];
+        for (int i = 1; i < len; ++i) {
+            const double m = rad[static_cast<size_t>(i)] - perp[static_cast<size_t>(i)];
+            if (m < min_margin) {
+                min_margin = m;
+            }
+        }
+    }
+    double pair_depth = 0.0;
+    for (int i = 0; i < len; ++i) {
+        const transformedray ri = raydb[std::make_pair(crids[i].camid, crids[i].rayid)];
+        for (int j = i + 1; j < len; ++j) {
+            const transformedray rj = raydb[std::make_pair(crids[j].camid, crids[j].rayid)];
+            const double dij = stm_line_line_distance(ri.x, ri.y, ri.z, ri.vx, ri.vy, ri.vz, rj.x, rj.y, rj.z, rj.vx,
+                                                       rj.vy, rj.vz);
+            const double ex = rad[static_cast<size_t>(i)] + rad[static_cast<size_t>(j)] - dij;
+            if (ex > 0.0) {
+                pair_depth += ex;
+            }
+        }
+    }
+    out.cylinder_min_axis_margin = min_margin;
+    out.cylinder_pair_depth_sum = pair_depth;
+
     out.matchx = sol.m_pData[0][0];
     out.matchy = sol.m_pData[1][0];
     out.matchz = sol.m_pData[2][0];

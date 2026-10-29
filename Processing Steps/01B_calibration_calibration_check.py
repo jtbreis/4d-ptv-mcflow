@@ -7,20 +7,20 @@ from python_4dptv.matching.stereomatching_error import evaluate_stereomatching_e
 
 os.chdir('/workspaces/4d-ptv-mcflow')
 # Set Folder
-folder = 'data/julian/PTV_above/Calibration_Before'
+folder = 'data/Windtunnel_PTV_TNTI/Calibration_Tests/Calibration'
 # Ensure output folders exist
 os.makedirs(os.path.join(folder, 'Error',
             'after_matching_plots'), exist_ok=True)
 os.makedirs(os.path.join(folder, 'Error', 'planes'), exist_ok=True)
 # Set StereoMatching Parameters
 mincameras = 3
-maxdistance = 0.1
-multiplematchesperraydistance = 0.5
-maxmatchesperray = 4
+maxdistance = 0.09
+multiplematchesperraydistance = 0.01
+maxmatchesperray = 50
 # Number of Voxels in direction [nx, ny, nz]
-nvoxels = [700, 1100, 400]
+nvoxels = [1100, 700, 400]
 # Bounding Box [minX, maxX, minY, maxY, minZ, maxZ]
-boundingbox = [-35, 35, -55, 55, -25, 25]
+boundingbox = [-60, 60, -50, 50, -25, 25]
 # %% Run Ray Computation
 test_folder = os.path.join(folder, 'Tests')
 rays = Rays(test_folder)
@@ -47,7 +47,7 @@ def _has_centers(path):
         p = path.rstrip(os.sep) + sub
         if os.path.isdir(p) and any(f.endswith(".h5") for f in os.listdir(p)):
             return True
-    return Fals
+    return False
 
 
 if os.path.isdir(folder_calibration_after):

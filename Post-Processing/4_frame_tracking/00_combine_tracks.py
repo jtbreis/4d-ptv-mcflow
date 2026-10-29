@@ -26,10 +26,10 @@ except ImportError:
     pa = None
     pq = None
 
-base_folder = 'raw_data/low_threshold/PTV_below'
-case = 'TTI_aligned_with_gravity'
+base_folder = '/workspaces/4d-ptv-mcflow/raw_data/low_threshold/PTV_above'
+case = 'TTI_no_gravity'
 
-runs = ['Run1', 'Run2']
+runs = ['Run1']
 
 # Parallel over runs (separate files; I/O-bound reads). Set to 1 to disable.
 MAX_RUN_WORKERS = min(8, (os.cpu_count() or 1) * 2)
@@ -201,6 +201,19 @@ def dataframe_from_h5part(path, run_label, run_number, pbar=None):
     return pd.DataFrame(_finalize_h5part_columns(col_chunks))
 
 
+def _align_table_to_schema(tbl, schema):
+    """Insert nulls for unified-schema columns missing from this chunk, then cast."""
+    for field in schema:
+        if field.name not in tbl.schema.names:
+            tbl = tbl.append_column(
+                field.name, pa.nulls(tbl.num_rows, type=field.type)
+            )
+    extra = [name for name in tbl.schema.names if name not in schema.names]
+    if extra:
+        tbl = tbl.drop(extra)
+    return tbl.select(list(schema.names)).cast(schema)
+
+
 def write_parquet_chunked(dfs_by_run, parquet_path):
     """
     Write one Parquet file in row chunks with tqdm (rows + current run in postfix).
@@ -234,6 +247,7 @@ def write_parquet_chunked(dfs_by_run, parquet_path):
 
     total_rows = sum(len(d) for _, d in pairs)
     writer = None
+    tmp_path = parquet_path + '.tmp'
     try:
         wbar = (
             tqdm(
@@ -251,11 +265,13 @@ def write_parquet_chunked(dfs_by_run, parquet_path):
             nrun = len(df_run)
             for start in range(0, nrun, WRITE_CHUNK_ROWS):
                 sub = df_run.iloc[start: start + WRITE_CHUNK_ROWS]
-                tbl = pa.Table.from_pandas(
-                    sub, preserve_index=False).cast(schema)
+                tbl = _align_table_to_schema(
+                    pa.Table.from_pandas(sub, preserve_index=False),
+                    schema,
+                )
                 if writer is None:
                     writer = pq.ParquetWriter(
-                        parquet_path,
+                        tmp_path,
                         schema,
                         compression='snappy',
                     )
@@ -264,9 +280,124 @@ def write_parquet_chunked(dfs_by_run, parquet_path):
                     wbar.update(len(sub))
         if wbar is not None:
             wbar.close()
+    except Exception:
+        if writer is not None:
+            writer.close()
+            writer = None
+        if os.path.isfile(tmp_path):
+            os.remove(tmp_path)
+        raise
     finally:
         if writer is not None:
             writer.close()
+    os.replace(tmp_path, parquet_path)
+
+
+def combine_to_parquet(
+    case_dir,
+    runs,
+    tracks_name='tracks.h5part',
+    parquet_path=None,
+    max_workers=None,
+):
+    """Load per-run track h5part files and write one combined Parquet.
+
+    Parameters
+    ----------
+    case_dir : str
+        Directory containing Run* subfolders.
+    runs : list[str]
+        Run folder names (e.g. ['Run1', 'Run2']).
+    tracks_name : str
+        Filename inside each run directory.
+    parquet_path : str or None
+        Output path; default ``{case_dir}/{basename(case_dir)}_{stem}.parquet``.
+    max_workers : int or None
+        Parallel run loaders; default ``MAX_RUN_WORKERS``.
+    """
+    if not runs:
+        raise ValueError('No runs specified')
+
+    case_name = os.path.basename(os.path.normpath(case_dir))
+    if parquet_path is None:
+        stem = os.path.splitext(tracks_name)[0]
+        parquet_path = os.path.join(case_dir, f'{case_name}_{stem}.parquet')
+
+    paths_meta = [
+        (os.path.join(case_dir, run, tracks_name), run)
+        for run in runs
+    ]
+    missing = [p for p, _ in paths_meta if not os.path.isfile(p)]
+    for p in missing:
+        print(f'Warning: missing {p}, skipping')
+    present_runs = [run for p, run in paths_meta if os.path.isfile(p)]
+    if not present_runs:
+        print('No track files found; not writing Parquet.')
+        return None
+
+    total_steps = sum(
+        count_step_keys(os.path.join(case_dir, run, tracks_name))
+        for run in present_runs
+    )
+
+    results = {}
+    workers = MAX_RUN_WORKERS if max_workers is None else max(1, int(max_workers))
+    n_workers = min(workers, len(present_runs))
+    use_parallel = n_workers > 1 and len(present_runs) > 1
+
+    if use_parallel:
+        with ThreadPoolExecutor(max_workers=n_workers) as ex:
+            futures = {}
+            for run in present_runs:
+                h5part_path = os.path.join(case_dir, run, tracks_name)
+                run_number = int(re.sub(r'^Run', '', run, flags=re.I) or '0')
+                fut = ex.submit(
+                    dataframe_from_h5part,
+                    h5part_path,
+                    run,
+                    run_number,
+                    None,
+                )
+                futures[fut] = run
+            run_iter = as_completed(futures)
+            if tqdm is not None:
+                run_iter = tqdm(
+                    run_iter,
+                    total=len(futures),
+                    desc='Loading runs (h5part)',
+                    unit='file',
+                )
+            for fut in run_iter:
+                run = futures[fut]
+                results[run] = fut.result()
+    else:
+        pbar = None
+        if tqdm is not None and total_steps > 0:
+            pbar = tqdm(
+                total=total_steps,
+                desc='Steps (all runs)',
+                unit='step',
+                smoothing=0.05,
+            )
+        for run in present_runs:
+            path = os.path.join(case_dir, run, tracks_name)
+            run_number = int(re.sub(r'^Run', '', run, flags=re.I) or '0')
+            results[run] = dataframe_from_h5part(
+                path, run, run_number, pbar=pbar
+            )
+        if pbar is not None:
+            pbar.close()
+
+    dfs_by_run = [(run, results[run]) for run in present_runs]
+    if all(d.empty for _, d in dfs_by_run):
+        print('No rows collected; not writing Parquet.')
+        return None
+
+    os.makedirs(os.path.dirname(os.path.abspath(parquet_path)) or '.', exist_ok=True)
+    write_parquet_chunked(dfs_by_run, parquet_path)
+    n_out = sum(len(d) for _, d in dfs_by_run if not d.empty)
+    print(f'Wrote {n_out} rows to {parquet_path}')
+    return parquet_path
 
 
 def main():

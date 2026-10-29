@@ -11,3 +11,7 @@
 !4BE-ETI/**
 !mcflow_plotting/**
 !Post-Processing/**
+!graph_tracking/**
+!docker/
+!docker/docker-entrypoint-umask.sh
+!docker/setup-shareddata-user.sh

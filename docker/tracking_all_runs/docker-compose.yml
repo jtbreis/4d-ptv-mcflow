@@ -1,7 +1,7 @@
 # Build from repo root (Dockerfile COPY expects full tree).
 # Run: docker compose run --rm tracking -- --case TTI_no_gravity
 # Detached: docker compose run -d --rm tracking -- --case ...
-# Env for mounts: OUTPUT_DIR (default: repo data/ via ../../data from this file).
+# Env for mounts: OUTPUT_DIR, INPUT_DIR (optional read-only input mount).
 
 services:
   tracking:
@@ -9,7 +9,18 @@ services:
       context: ../..
       dockerfile: docker/tracking_all_runs/Dockerfile.tracking_all_runs
     image: ${IMAGE_NAME:-4d-ptv-tracking-all-runs}
+    user: appuser
+    group_add:
+      - "1500"
     volumes:
       - type: bind
         source: ${OUTPUT_DIR:-../../data}
         target: /workspaces/4d-ptv-mcflow/data
+      - type: bind
+        source: ${INPUT_DIR:-${OUTPUT_DIR:-../../data}}
+        target: /workspaces/4d-ptv-mcflow/input
+        read_only: true
+    environment:
+      TRACKING_QUIET: ${TRACKING_QUIET:-}
+      PTV_WEBLAUNCHER: ${PTV_WEBLAUNCHER:-}
+      PARTICLE_PROGRESS_INTERVAL: ${PARTICLE_PROGRESS_INTERVAL:-}

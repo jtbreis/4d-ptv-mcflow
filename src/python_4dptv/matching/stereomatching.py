@@ -7,16 +7,64 @@ from ..utils.structure import Filenames
 
 from ..plotting.plot_particles import plot_particles_xyze
 
+try:
+    from ..io.h5_metadata import write_h5_run_metadata
+except ImportError:
+    write_h5_run_metadata = None
 
-def enrich_stereo_output_with_particle_props(path):
+
+_PARTICLE_PROP_KEYS = ("diameter", "intensity", "mass")
+
+
+def enrich_stereo_output_with_particle_props(
+    path,
+    *,
+    rays_path=None,
+    write_particle_props=True,
+    write_diameter=True,
+    write_intensity=True,
+    write_mass=True,
+):
     """
-    Add diameter, intensity, and mass to rays_out_cpp.h5 using camrayids
+    Add diameter, intensity, and/or mass to rays_out_cpp.h5 using camrayids
     to look up values from rays.h5. Writes values from all contributing
     cameras per match: shape (n_matches, maxcams), NaN where a camera did not contribute.
+
+    Set ``write_particle_props=False`` to skip enrichment entirely. Individual
+    ``write_diameter`` / ``write_intensity`` / ``write_mass`` flags select which
+    datasets are written (defaults: all on). Disabled props are removed if present.
     """
-    rays_path = path + Filenames.RAYS.value
+    if not write_particle_props:
+        return
+
+    props_to_write = [
+        key
+        for key, enabled in (
+            ("diameter", write_diameter),
+            ("intensity", write_intensity),
+            ("mass", write_mass),
+        )
+        if enabled
+    ]
+
+    rays_path = rays_path if rays_path is not None else path + Filenames.RAYS.value
     stm_path = path + Filenames.STM.value
     if not os.path.isfile(rays_path) or not os.path.isfile(stm_path):
+        return
+
+    if not props_to_write:
+        # Master on but all datasets off: strip any existing prop datasets.
+        try:
+            with h5py.File(stm_path, "r+") as s:
+                for fk in s.keys():
+                    if not fk.startswith("frame"):
+                        continue
+                    grp = s[fk]
+                    for key in _PARTICLE_PROP_KEYS:
+                        if key in grp:
+                            del grp[key]
+        except OSError:
+            pass
         return
 
     with h5py.File(rays_path, "r") as r:
@@ -40,9 +88,7 @@ def enrich_stereo_output_with_particle_props(path):
             for fk in frame_keys:
                 g = r[cam][fk]
                 rays_props[cam][fk] = {
-                    "diameter": np.asarray(g["diameter"][()]),
-                    "intensity": np.asarray(g["intensity"][()]),
-                    "mass": np.asarray(g["mass"][()]),
+                    key: np.asarray(g[key][()]) for key in props_to_write
                 }
 
     try:
@@ -71,9 +117,10 @@ def enrich_stereo_output_with_particle_props(path):
             camrayids = grp["camrayids"][()]
             maxcams = camrayids.shape[0] // 2
 
-            diameter = np.full((n_matches, maxcams), np.nan, dtype=np.float64)
-            intensity = np.full((n_matches, maxcams), np.nan, dtype=np.float64)
-            mass = np.full((n_matches, maxcams), np.nan, dtype=np.float64)
+            arrays = {
+                key: np.full((n_matches, maxcams), np.nan, dtype=np.float64)
+                for key in props_to_write
+            }
 
             for i in range(n_matches):
                 for j in range(maxcams):
@@ -85,27 +132,37 @@ def enrich_stereo_output_with_particle_props(path):
                     if cam_name not in rays_props or fk not in rays_props[cam_name]:
                         continue
                     d = rays_props[cam_name][fk]
-                    if rayid < len(d["diameter"]):
-                        diameter[i, j] = d["diameter"][rayid]
-                        intensity[i, j] = d["intensity"][rayid]
-                        mass[i, j] = d["mass"][rayid]
+                    ref = next(iter(d.values()))
+                    if rayid < len(ref):
+                        for key in props_to_write:
+                            arrays[key][i, j] = d[key][rayid]
 
-            if "diameter" in grp:
-                del grp["diameter"]
-            if "intensity" in grp:
-                del grp["intensity"]
-            if "mass" in grp:
-                del grp["mass"]
-            grp.create_dataset("diameter", data=diameter)
-            grp.create_dataset("intensity", data=intensity)
-            grp.create_dataset("mass", data=mass)
+            for key in _PARTICLE_PROP_KEYS:
+                if key in grp:
+                    del grp[key]
+            for key in props_to_write:
+                grp.create_dataset(key, data=arrays[key])
 
 
 class StereoMatching():
-    def __init__(self, path, mincameras, maxdistance, multiplematchesperraydistance, maxmatchesperray, nvoxels: list[int], boundingbox: list[float]):
+    def __init__(
+        self,
+        path,
+        mincameras,
+        maxdistance,
+        multiplematchesperraydistance,
+        maxmatchesperray,
+        nvoxels: list[int],
+        boundingbox: list[float],
+        *,
+        rays_input_path=None,
+        run_metadata=None,
+    ):
         self.path = path
-        self.frames = self.read_number_of_frames(path + Filenames.RAYS.value)
-        self.filename = self.path + Filenames.RAYS.value
+        self.rays_input_path = rays_input_path if rays_input_path is not None else path
+        self.run_metadata = run_metadata
+        self.frames = self.read_number_of_frames(self.rays_input_path + Filenames.RAYS.value)
+        self.filename = self.rays_input_path + Filenames.RAYS.value
         self.output = self.path
         self.mincameras = mincameras
         self.maxdistance = maxdistance
@@ -135,6 +192,16 @@ class StereoMatching():
         spatial_boxes=0,
         spatial_overlap_cells=1,
         frame_parallelism=0,
+        cylinder=False,
+        cylinder_max_shells=32,
+        cylinder_voxels=None,
+        cylinder_rank=None,
+        cylinder_h5_aux=None,
+        write_particle_props=True,
+        write_diameter=True,
+        write_intensity=True,
+        write_mass=True,
+        resume=False,
     ):
         """Run the C++ STM binary.
 
@@ -144,9 +211,34 @@ class StereoMatching():
 
         ``frame_parallelism`` sets ``--frame-parallelism`` (max frames processed at once; 0 = use
         ``OMP_NUM_THREADS`` for the outer frame loop, same as not passing the flag).
+
+        ``resume=True`` passes ``--resume``: keep an existing ``rays_out_cpp.h5`` and skip frames that
+        already have complete match groups (``xyze`` + ``camrayids``).
+
+        Cylinder mode (uses ``diameter`` from ``rays.h5`` when ``cylinder=True``): passes
+        ``--cylinder-voxels``, ``--cylinder-rank``, and ``--cylinder-h5-aux`` unless overridden by
+        the individual ``cylinder_*`` arguments. ``cylinder_max_shells`` maps to ``--cylinder-max-shells``.
+
+        After a successful STM run, particle properties from ``rays.h5`` are optionally written
+        into ``rays_out_cpp.h5``. Use ``write_particle_props=False`` to skip that step, or
+        ``write_diameter`` / ``write_intensity`` / ``write_mass`` to select datasets (all default on).
         """
         if nframes is not None:
             self.frames = nframes
+
+        self._last_stm_run = {
+            "nthreads": nthreads,
+            "timing": timing,
+            "spatial_boxes": spatial_boxes,
+            "spatial_overlap_cells": spatial_overlap_cells,
+            "frame_parallelism": frame_parallelism,
+            "max_frames": nframes,
+            "write_particle_props": write_particle_props,
+            "write_diameter": write_diameter,
+            "write_intensity": write_intensity,
+            "write_mass": write_mass,
+            "resume": resume,
+        }
 
         env = os.environ.copy()
         env["OMP_NUM_THREADS"] = f'{nthreads}'
@@ -169,11 +261,25 @@ class StereoMatching():
         ]
         if timing:
             cmd.append('--timing')
+        if resume:
+            cmd.append('--resume')
         if spatial_boxes and int(spatial_boxes) > 0:
             cmd.extend(['--spatial-boxes', str(int(spatial_boxes))])
             cmd.extend(['--spatial-overlap', str(int(spatial_overlap_cells))])
         if frame_parallelism and int(frame_parallelism) > 0:
             cmd.extend(['--frame-parallelism', str(int(frame_parallelism))])
+
+        use_vox = cylinder_voxels if cylinder_voxels is not None else bool(cylinder)
+        use_rank = cylinder_rank if cylinder_rank is not None else bool(cylinder)
+        use_h5 = cylinder_h5_aux if cylinder_h5_aux is not None else bool(cylinder)
+        if use_vox:
+            cmd.append('--cylinder-voxels')
+        if use_rank:
+            cmd.append('--cylinder-rank')
+        if use_h5:
+            cmd.append('--cylinder-h5-aux')
+        if use_vox or use_rank or use_h5:
+            cmd.extend(['--cylinder-max-shells', str(int(cylinder_max_shells))])
 
         proc = subprocess.Popen(
             cmd,
@@ -203,8 +309,41 @@ class StereoMatching():
                 f"Stereo matching (STM) process exited with code {rc}. {hint}"
             )
 
-        # Carry diameter, intensity, mass from centers through to STM output
-        enrich_stereo_output_with_particle_props(self.path)
+        # Carry diameter, intensity, mass from centers through to STM output (optional)
+        enrich_stereo_output_with_particle_props(
+            self.path,
+            rays_path=self.rays_input_path + Filenames.RAYS.value,
+            write_particle_props=write_particle_props,
+            write_diameter=write_diameter,
+            write_intensity=write_intensity,
+            write_mass=write_mass,
+        )
+        self._write_stm_metadata(nframes)
+
+    def _write_stm_metadata(self, nframes: int) -> None:
+        if write_h5_run_metadata is None:
+            return
+        stm_path = self.path + Filenames.STM.value
+        if not os.path.isfile(stm_path):
+            return
+        meta = dict(self.run_metadata or {})
+        meta.setdefault("job_id", "stereo_matching")
+        params = dict(meta.get("parameters") or {})
+        params.update({
+            "min_cameras": self.mincameras,
+            "max_distance": self.maxdistance,
+            "multiple_matches_per_ray_distance": self.multiplematchesperraydistance,
+            "max_matches_per_ray": self.maxmatchesperray,
+            "nvoxels": [self.nx, self.ny, self.nz],
+            "bounding_box": self.boundingbox,
+            "frames_requested": nframes,
+            "input_rays_path": os.path.abspath(self.filename),
+            "output_dir": os.path.abspath(self.path),
+        })
+        if getattr(self, "_last_stm_run", None):
+            params.update(self._last_stm_run)
+        meta["parameters"] = params
+        write_h5_run_metadata(stm_path, meta)
 
     def plot_matches(self, external_path=None):
         if external_path is None:

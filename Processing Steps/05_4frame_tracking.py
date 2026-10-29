@@ -11,7 +11,7 @@ os.environ["4BE_ETI_NUMBA"] = "1" if use_numba else "0"
 
 # directory containing the file with particle information (location, area, frame number)
 # you must include the full path to the directory here
-folder = "/workspaces/4d-ptv-mcflow/raw_data/low_threshold/PTV_above/TTI_no_gravity/Run1"
+folder = "/workspaces/4d-ptv-mcflow/raw_data/low_threshold/PTV_above/TTI_opposing_gravity/Run1"
 filename = "rays_out_cpp.h5"
 run = "run1"
 
@@ -32,7 +32,7 @@ box_size_initial_y_hi = box_size_initial_y_max
 box_size_initial_z = 1.5
 
 # Set box size used after a track is initialized (using min)
-box_size = 0.07
+box_size = 0.2
 
 # Optional 3D meshgrid caps (None = package defaults 1000 / 2000); increase for very dense frames.
 max_candidates_mesh = 3000
@@ -61,10 +61,8 @@ tracking = FourFrameTracking(
     dt=1e-3,
     rep_rate=10,
     position_unit="mm",
-    write_paraview=True,
     write_failed_tracks=False,
     use_bspline=True,
-    export_bspline_paraview=True,
     # print ``frame: particle i/n`` every N particles; 0 = off (default in package is 1000)
     particle_progress_interval=10000,
     max_candidates_mesh=max_candidates_mesh,
@@ -75,7 +73,7 @@ tracking = FourFrameTracking(
 # %%
 # Number of worker processes; set max_frame_ranges to an integer to only process the first N frame ranges, or None for all.
 workers = 3
-max_frame_ranges = 1
+max_frame_ranges = 3
 tracking.run_tracking(workers, max_frame_ranges=max_frame_ranges)
 
 # %%

@@ -1,14 +1,15 @@
 {
-    // Use Ubuntu as the base image
-    "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": "."
+    },
 
-    // Features to install Python
     "features": {
         "python": {
             "version": "3.10"
         }
     },
-    "postCreateCommand": "sudo apt-get update && sudo apt-get install -y build-essential g++ libhdf5-dev && pip install -r requirements.txt",
+    "postCreateCommand": "sudo apt-get update && sudo apt-get install -y build-essential g++ libhdf5-dev && pip install -r requirements.txt && (getent group shareddata >/dev/null || sudo groupadd -g 1500 shareddata) && sudo usermod -aG shareddata vscode",
     "customizations": {
         "vscode": {
         "extensions": [
@@ -25,8 +26,13 @@
         }
         }
     },
+    "remoteUser": "root",
+    "containerUser": "root",
+    "updateRemoteUserUID": false,
     "mounts": [
+        "source=~/notebook/,target=/workspaces/4d-ptv-mcflow/notebook,type=bind,consistency=cached",
         "source=/mnt/ssd/,target=/workspaces/4d-ptv-mcflow/data,type=bind,consistency=cached",
-        "source=/mnt/raid/,target=/workspaces/4d-ptv-mcflow/raw_data,type=bind,consistency=cached"
+        "source=/mnt/raid/,target=/workspaces/4d-ptv-mcflow/raw_data,type=bind,consistency=cached",
+        "source=/mnt/raid1/,target=/workspaces/4d-ptv-mcflow/processed_data,type=bind,consistency=cached"
     ]
 }

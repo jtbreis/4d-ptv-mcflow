@@ -22,6 +22,9 @@ IMAGE_NAME="${IMAGE_NAME:-4d-ptv-center-finding-params}"
 RAW_DATA_DIR="${RAW_DATA_DIR:-$REPO_ROOT/raw_data}"
 OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/data}"
 
+# shellcheck source=docker/shareddata-docker-args.sh
+source "$REPO_ROOT/docker/shareddata-docker-args.sh"
+
 build() {
   echo "Building image: $IMAGE_NAME"
   docker build -f "$SCRIPT_DIR/Dockerfile.center_finding_params" -t "$IMAGE_NAME" "$REPO_ROOT"
@@ -31,6 +34,7 @@ run_one() {
   local run="$1"
   echo "Running center-finding parameter search for run: $run${CASE:+ case=$CASE}${DATASET:+ dataset=$DATASET}${DETACHED:+ (detached)}"
   docker run --rm ${DETACHED:+-d} \
+    "${SHAREDDATA_DOCKER_ARGS[@]}" \
     -v "$RAW_DATA_DIR:/workspaces/4d-ptv-mcflow/raw_data:ro" \
     -v "$OUTPUT_DIR:/workspaces/4d-ptv-mcflow/data" \
     "$IMAGE_NAME" \

@@ -65,7 +65,6 @@ def run_sensitivity(
     output_dir: str,
     box_sizes: list[float],
     workers: int = 1,
-    write_paraview: bool = False,
     write_failed_tracks: bool = True,
 ) -> list[str]:
     """
@@ -102,7 +101,6 @@ def run_sensitivity(
             box_size_track=box_size,
             dt=DT,
             rep_rate=REP_RATE,
-            write_paraview=write_paraview,
             write_failed_tracks=write_failed_tracks,
         )
         tracking.run_tracking(workers=workers)
@@ -148,11 +146,6 @@ def parse_args():
         help="Number of workers for tracking (default: 1).",
     )
     p.add_argument(
-        "--write-paraview",
-        action="store_true",
-        help="Export ParaView files for each run (slower).",
-    )
-    p.add_argument(
         "--log-file",
         type=str,
         default=None,
@@ -183,7 +176,6 @@ def main():
             args.output_dir,
             box_sizes,
             workers=args.workers,
-            write_paraview=args.write_paraview,
         )
         print(f"Done. Saved {len(paths)} track files.")
         return 0

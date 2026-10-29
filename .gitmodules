@@ -12,4 +12,4 @@
 	url = git@github.com:jtbreis/ptv_weblauncher.git
 [submodule "graph_tracking"]
 	path = graph_tracking
-	url = /workspaces/graph-tracking.git
+	url = git@github.com:jtbreis/4BE-ETI-graph-tracking.git

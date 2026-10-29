@@ -42,6 +42,10 @@ struct candidatematch{
     double matchy = 0;
     double matchz = 0;
     double matcherror = -1;
+    // Cylinder model (optional): sum over pairs of max(0, r_i+r_j - line_line_dist_ij);
+    // min over rays of (r_i - perp_dist_i) at the LSQ point. Used for ranking / HDF5 aux.
+    double cylinder_pair_depth_sum = 0;
+    double cylinder_min_axis_margin = 0;
     std::vector<camrayid> camrayids;
 };
 
@@ -54,6 +58,8 @@ struct ray{
     double vx;
     double vy;
     double vz;
+    // Particle diameter in world units from rays.h5 (optional; 0 or NaN = treat as line).
+    double diameter = 0;
 };
 
 struct transformedray{
@@ -65,6 +71,7 @@ struct transformedray{
     double vx;
     double vy;
     double vz;
+    double diameter = 0;
     bool hit = false;
     bool inside = false;
 };

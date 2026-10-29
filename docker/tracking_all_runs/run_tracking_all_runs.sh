@@ -14,11 +14,13 @@
 #   docker compose -f docker/tracking_all_runs/docker-compose.yml build
 #   OUTPUT_DIR=/path/to/data docker compose -f docker/tracking_all_runs/docker-compose.yml run --rm tracking -- --case TTI_no_gravity
 #
-# Env: DOCKER (optional: full path to docker binary; otherwise auto-detected), OUTPUT_DIR, CASE, RUNS, OUTPUT_BASE,
+# Env: DOCKER, INPUT_DIR, INPUT_BASE, OUTPUT_DIR, OUTPUT_BASE, CASE, RUNS,
 #      RAYS_FILENAME, BOX_SIZE_X, BOX_SIZE_INITIAL_X_LO, BOX_SIZE_INITIAL_X_HI,
 #      BOX_SIZE_Y, BOX_SIZE_Z, BOX_SIZE_TRACK,
 #      DT, REP_RATE, WORKERS, NO_WRITE_PARAVIEW, WRITE_FAILED_TRACKS,
-#      MAX_FRAME_RANGES, POSITION_UNIT, DETACHED, IMAGE_NAME
+#      MAX_FRAME_RANGES, MAX_FRAMES (limit frames processed; see run_tracking_all_runs.py),
+#      POSITION_UNIT, TRACKING_QUIET, PARTICLE_PROGRESS_INTERVAL,
+#      DETACHED, IMAGE_NAME
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,20 +59,27 @@ export IMAGE_NAME
 OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/data}"
 export OUTPUT_DIR
 
+# shellcheck source=docker/resolve_data_paths.sh
+source "$REPO_ROOT/docker/resolve_data_paths.sh"
+
 build() {
   echo "Building image: $IMAGE_NAME (tracking, all runs)"
   "$DOCKER" compose -f "$COMPOSE_FILE" build
 }
 
 run_container() {
-  echo "Mounts: data (output) -> $OUTPUT_DIR"
-  echo "  Expects {OUTPUT_BASE:-data/PTV_center}/{case}/{run}/rays_out_cpp.h5 (run stereo matching first)."
-  echo "Running tracking (all runs)${CASE:+ case=$CASE}${OUTPUT_BASE:+ output_base=$OUTPUT_BASE}${WORKERS:+ workers=$WORKERS}${MAX_FRAME_RANGES:+ max_frame_ranges=$MAX_FRAME_RANGES}${POSITION_UNIT:+ position_unit=$POSITION_UNIT}${DETACHED:+ (detached)}"
-  "$DOCKER" compose -f "$COMPOSE_FILE" run --rm ${DETACHED:+-d} \
-    tracking \
+  _resolve_data_paths
+  echo "Mounts: input (read) -> $INPUT_DIR  |  output (write) -> $OUTPUT_DIR"
+  echo "  Read:  {INPUT_BASE}/{case}/{run}/${RAYS_FILENAME:-rays_out_cpp.h5}"
+  echo "  Write: {OUTPUT_BASE}/{case}/{run}/tracks_staging.h5part (+ tracks_staging.json; tracks.h5part never overwritten)"
+  echo "Running tracking (all runs)${CASE:+ case=$CASE}${WORKERS:+ workers=$WORKERS}${MAX_FRAMES:+ max_frames=$MAX_FRAMES}${MAX_FRAME_RANGES:+ max_frame_ranges=$MAX_FRAME_RANGES}${POSITION_UNIT:+ position_unit=$POSITION_UNIT}${DETACHED:+ (detached)}${PTV_CONTAINER_NAME:+ name=$PTV_CONTAINER_NAME}"
+  # shellcheck source=docker/ptv_compose_run.sh
+  source "$REPO_ROOT/docker/ptv_compose_run.sh"
+  ptv_compose_run "$COMPOSE_FILE" tracking \
     ${CASE:+--case "$CASE"} \
     ${RUNS:+--runs "$RUNS"} \
-    ${OUTPUT_BASE:+--output-base "$OUTPUT_BASE"} \
+    --input-base "$CONTAINER_INPUT_BASE" \
+    --output-base "$CONTAINER_OUTPUT_BASE" \
     ${RAYS_FILENAME:+--rays-filename "$RAYS_FILENAME"} \
     ${BOX_SIZE_X:+--box-size-x "$BOX_SIZE_X"} \
     ${BOX_SIZE_INITIAL_X_LO:+--box-size-initial-x-lo "$BOX_SIZE_INITIAL_X_LO"} \
@@ -82,9 +91,12 @@ run_container() {
     ${REP_RATE:+--rep-rate "$REP_RATE"} \
     ${WORKERS:+--workers "$WORKERS"} \
     ${MAX_FRAME_RANGES:+--max-frame-ranges "$MAX_FRAME_RANGES"} \
+    ${MAX_FRAMES:+--max-frames "$MAX_FRAMES"} \
     ${POSITION_UNIT:+--position-unit "$POSITION_UNIT"} \
     ${WRITE_FAILED_TRACKS:+--write-failed-tracks} \
-    ${NO_WRITE_PARAVIEW:+--no-write-paraview}
+    ${NO_WRITE_PARAVIEW:+--no-write-paraview} \
+    ${TRACKING_QUIET:+--quiet} \
+    ${PARTICLE_PROGRESS_INTERVAL:+--particle-progress-interval "$PARTICLE_PROGRESS_INTERVAL"}
 }
 
 case "${1:-}" in
@@ -101,7 +113,7 @@ case "${1:-}" in
     echo "Usage: $0 {build|run} [--detached | -d]"
     echo "  build  Build tracking (all runs) image"
     echo "  run    Run 4-frame tracking for all runs"
-    echo "Env: OUTPUT_DIR, CASE, RUNS, OUTPUT_BASE, RAYS_FILENAME, BOX_SIZE_X, BOX_SIZE_INITIAL_X_LO, BOX_SIZE_INITIAL_X_HI, BOX_SIZE_Y, BOX_SIZE_Z, BOX_SIZE_TRACK, DT, REP_RATE, WORKERS, NO_WRITE_PARAVIEW, WRITE_FAILED_TRACKS, MAX_FRAME_RANGES, POSITION_UNIT, DETACHED"
+    echo "Env: INPUT_DIR, INPUT_BASE, OUTPUT_DIR, OUTPUT_BASE, CASE, RUNS, RAYS_FILENAME, BOX_SIZE_X, BOX_SIZE_INITIAL_X_LO, BOX_SIZE_INITIAL_X_HI, BOX_SIZE_Y, BOX_SIZE_Z, BOX_SIZE_TRACK, DT, REP_RATE, WORKERS, NO_WRITE_PARAVIEW, WRITE_FAILED_TRACKS, MAX_FRAME_RANGES, MAX_FRAMES, POSITION_UNIT, TRACKING_QUIET, PARTICLE_PROGRESS_INTERVAL, DETACHED"
     exit 1
     ;;
 esac

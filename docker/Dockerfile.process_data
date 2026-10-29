@@ -31,4 +31,9 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Set python3 as default python
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
-ENTRYPOINT ["python3", "Processing Steps/complete_workflow.py"]
+COPY docker/docker-entrypoint-umask.sh /usr/local/bin/docker-entrypoint-umask.sh
+COPY docker/setup-shareddata-user.sh /tmp/setup-shareddata-user.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint-umask.sh \
+    && bash /tmp/setup-shareddata-user.sh && rm /tmp/setup-shareddata-user.sh
+USER appuser
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint-umask.sh", "python3", "Processing Steps/complete_workflow.py"]

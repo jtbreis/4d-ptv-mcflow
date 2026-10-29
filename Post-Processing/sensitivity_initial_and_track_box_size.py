@@ -208,10 +208,8 @@ def run_grid(
     output_dir: str,
     jobs: list[tuple[float, float, float, tuple, float]],
     workers: int,
-    write_paraview: bool,
     write_failed_tracks: bool,
     use_bspline: bool,
-    export_bspline_paraview: bool,
     shard_id: int | None,
     num_shards: int | None,
     use_isolated_workdir: bool,
@@ -282,10 +280,8 @@ def run_grid(
                 box_size_track=ttrack,
                 dt=DT,
                 rep_rate=REP_RATE,
-                write_paraview=write_paraview,
                 write_failed_tracks=write_failed_tracks,
                 use_bspline=use_bspline,
-                export_bspline_paraview=export_bspline_paraview,
                 **asym_kwargs,
             )
             tracking.run_tracking(workers=workers)
@@ -359,12 +355,10 @@ def parse_args():
         help="Comma-separated box_size_track values.",
     )
     p.add_argument("--workers", type=int, default=1)
-    p.add_argument("--write-paraview", action="store_true")
     p.add_argument("--write-failed-tracks", action="store_true", default=True)
     p.add_argument("--no-write-failed-tracks",
                    action="store_false", dest="write_failed_tracks")
     p.add_argument("--use-bspline", action="store_true")
-    p.add_argument("--export-bspline-paraview", action="store_true")
     p.add_argument("--log-file", type=str, default=None)
 
     # Optional asymmetric initial bounds (comma-separated lists; product across lo/hi for x,y,z)
@@ -511,10 +505,8 @@ def main():
             args.output_dir,
             jobs,
             workers=args.workers,
-            write_paraview=args.write_paraview,
             write_failed_tracks=args.write_failed_tracks,
             use_bspline=args.use_bspline,
-            export_bspline_paraview=args.export_bspline_paraview,
             shard_id=shard_id,
             num_shards=num_shards,
             use_isolated_workdir=use_isolated,

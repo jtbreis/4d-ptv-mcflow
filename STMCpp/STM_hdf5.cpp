@@ -7,19 +7,33 @@
  */
 
 #include <iostream>
+#include <sys/stat.h>
 #include "STM_hdf5.h"
+
+namespace {
+bool file_exists_regular(const std::string& path) {
+    struct stat st{};
+    return ::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+}
+}  // namespace
 
 STM_File::STM_File() {
     opened = false;
+    f = nullptr;
+    readonly_mode = true;
 }
 
 STM_File::STM_File(std::string filename) {
     opened = false;
+    f = nullptr;
+    readonly_mode = true;
     open(filename);
 }
 
 STM_File::STM_File(std::string filename, const unsigned int maxframes, const unsigned int mincameras, const double maxdistance, const unsigned int maxmatchesperray, const unsigned int nx, const unsigned int ny, const unsigned int nz) {
     opened = false;
+    f = nullptr;
+    readonly_mode = false;
     open(filename, maxframes, mincameras, maxdistance, maxmatchesperray, nx, ny, nz);
 }
 
@@ -138,98 +152,200 @@ void STM_File::open(std::string filename, const unsigned int maxframes, const un
 
 // Destructor method
 STM_File::~STM_File() {
+    if (!opened || f == nullptr) {
+        return;
+    }
     f->flush(H5F_SCOPE_GLOBAL);
     f->close();
     delete f;
+    f = nullptr;
+    opened = false;
+}
+
+std::string STM_File::frame_group_path(unsigned int frameno) {
+    std::string s = std::to_string(frameno);
+    if (s.length() < 5) {
+        s.insert(0, 5 - s.length(), '0');
+    }
+    return "/frame" + s;
+}
+
+bool STM_File::frame_is_complete(unsigned int frameno) const {
+    if (!opened || f == nullptr) {
+        return false;
+    }
+    const std::string gpath = frame_group_path(frameno);
+    try {
+        if (!f->nameExists(gpath)) {
+            return false;
+        }
+        H5::Group g = f->openGroup(H5std_string(gpath));
+        return g.nameExists("xyze") && g.nameExists("camrayids");
+    } catch (const H5::Exception&) {
+        return false;
+    }
+}
+
+unsigned int STM_File::count_complete_frames(unsigned int nframes) const {
+    unsigned int n = 0;
+    for (unsigned int i = 0; i < nframes; ++i) {
+        if (frame_is_complete(i)) {
+            ++n;
+        }
+    }
+    return n;
+}
+
+void STM_File::open_or_resume(std::string filename, const unsigned int maxframes, const unsigned int mincameras, const double maxdistance, const unsigned int maxmatchesperray, const unsigned int nx, const unsigned int ny, const unsigned int nz, bool resume) {
+    if (resume && file_exists_regular(filename)) {
+        if (opened) {
+            std::cerr << "Warning: STM HDF5 file was already open!" << std::endl;
+        }
+        f = new H5::H5File(H5std_string(filename), H5F_ACC_RDWR);
+        readonly_mode = false;
+        opened = true;
+        std::cout << "File '" << filename << "' opened in resume (read/write) mode." << std::endl;
+
+        // Keep existing attributes when present; refresh maxframes to this run's target.
+        try {
+            H5::Attribute attr_mincameras = f->openAttribute(H5std_string("mincameras"));
+            attr_mincameras.read(H5::PredType::NATIVE_INT, &this->mincameras);
+            H5::Attribute attr_maxdistance = f->openAttribute(H5std_string("maxdistance"));
+            attr_maxdistance.read(H5::PredType::NATIVE_DOUBLE, &this->maxdistance);
+            H5::Attribute attr_maxmatchesperray = f->openAttribute(H5std_string("maxmatchesperray"));
+            attr_maxmatchesperray.read(H5::PredType::NATIVE_INT, &this->maxmatchesperray);
+            H5::Attribute attr_nx = f->openAttribute(H5std_string("nx"));
+            attr_nx.read(H5::PredType::NATIVE_INT, &this->nx);
+            H5::Attribute attr_ny = f->openAttribute(H5std_string("ny"));
+            attr_ny.read(H5::PredType::NATIVE_INT, &this->ny);
+            H5::Attribute attr_nz = f->openAttribute(H5std_string("nz"));
+            attr_nz.read(H5::PredType::NATIVE_INT, &this->nz);
+            if (this->mincameras != mincameras || this->maxdistance != maxdistance
+                || this->maxmatchesperray != maxmatchesperray
+                || this->nx != nx || this->ny != ny || this->nz != nz) {
+                std::cerr << "Warning: resume file attributes differ from current STM parameters "
+                          << "(mincameras/maxdistance/maxmatchesperray/nx/ny/nz). "
+                          << "Skipping existing frames anyway; new frames use the current parameters.\n";
+            }
+        } catch (const H5::Exception& e) {
+            std::cerr << "Warning: could not read some attributes from resume file: " << e.getDetailMsg() << std::endl;
+            this->mincameras = mincameras;
+            this->maxdistance = maxdistance;
+            this->maxmatchesperray = maxmatchesperray;
+            this->nx = nx;
+            this->ny = ny;
+            this->nz = nz;
+        }
+        this->maxframes = maxframes;
+        set_last_frame(maxframes);
+        const unsigned int already = count_complete_frames(maxframes);
+        std::cout << "Resume: found " << already << " complete frame group(s) to skip (of " << maxframes << ")." << std::endl;
+        return;
+    }
+    if (resume && !file_exists_regular(filename)) {
+        std::cout << "Resume requested but '" << filename << "' does not exist; creating a new file.\n";
+    }
+    open(filename, maxframes, mincameras, maxdistance, maxmatchesperray, nx, ny, nz);
 }
 
 // Methods
 
-void STM_File::write_matches(const unsigned int frameno, std::vector<candidatematch> &matches) {
+void STM_File::write_matches(const unsigned int frameno, std::vector<candidatematch> &matches, bool write_cylinder_aux) {
     /*
-     * Write matches to HDF5 file.
+     * Write matches to HDF5 file (one bulk write per dataset).
      *
+     * Layout is (rows, cols) = (components, N_matches) in C (row-major) order, matching
+     * the previous per-column hyperslab writes: buf[comp * N + match].
      */
+
+    const hsize_t nmatches = static_cast<hsize_t>(matches.size());
 
     // Find the largest number of camrayids for this frame
     unsigned int maxcams = 0;
-    for(auto match: matches) {
+    for (const auto& match : matches) {
         if (match.camrayids.size() > maxcams) {
-            maxcams = match.camrayids.size();
+            maxcams = static_cast<unsigned int>(match.camrayids.size());
         }
     }
+    // Empty frames still need a group with zero-width datasets so resume can skip them.
+    if (maxcams == 0) {
+        maxcams = 1;
+    }
 
-    // Dataset sizes
     const unsigned int RANK = 2;
-    hsize_t xyze_dim_vector[RANK] = {4, matches.size()};
+    hsize_t xyze_dim_vector[RANK] = {4, nmatches};
     H5::DataSpace xyze_space(RANK, xyze_dim_vector);
-    hsize_t camrayids_dim_vector[RANK] = {2*maxcams, matches.size()};
+    hsize_t camrayids_dim_vector[RANK] = {2 * maxcams, nmatches};
     H5::DataSpace camrayids_space(RANK, camrayids_dim_vector);
 
-    // Dataset options
-    unsigned int chunksize = 1024;
-    if (chunksize >= matches.size()) {
-        chunksize = matches.size()/4;
-    }
+    // Chunk + light compression when large enough. Deflate 9 was a major time sink.
     H5::DSetCreatPropList xyze_plist;
-    hsize_t xyze_chunksize[RANK] = {4, chunksize};
-    if (chunksize > 1) {
-        xyze_plist.setChunk(RANK, xyze_chunksize);
-        xyze_plist.setDeflate(9);
-    }
-
     H5::DSetCreatPropList camrayids_plist;
-    hsize_t camrayids_chunksize[RANK] = {2*maxcams, chunksize};
-    if (chunksize > 1) {
+    if (nmatches > 1) {
+        hsize_t chunk_n = nmatches;
+        if (chunk_n > 65536) {
+            chunk_n = 65536;
+        }
+        hsize_t xyze_chunksize[RANK] = {4, chunk_n};
+        xyze_plist.setChunk(RANK, xyze_chunksize);
+        xyze_plist.setDeflate(1);
+
+        hsize_t camrayids_chunksize[RANK] = {2 * maxcams, chunk_n};
         camrayids_plist.setChunk(RANK, camrayids_chunksize);
-        camrayids_plist.setDeflate(9);
+        camrayids_plist.setDeflate(1);
     }
 
-    // Create the datasets
-    std::string xyze_name = "xyze";
-    H5::Group frameno_group = f->createGroup(H5std_string("/frame" + std::to_string(frameno).insert(0, 5 - std::to_string(frameno).length(), '0')));
-    H5::DataSet xyze_dset = frameno_group.createDataSet(H5std_string(xyze_name),
-                                            H5::PredType::NATIVE_DOUBLE,
-                                            xyze_space, xyze_plist);
-    std::string camrayids_name = "camrayids";
-    H5::DataSet camrayids_dset = frameno_group.createDataSet(H5std_string(camrayids_name),
-                                                  H5::PredType::NATIVE_LONG,
-                                                  camrayids_space, camrayids_plist);
+    const std::string gpath = frame_group_path(frameno);
+    if (f->nameExists(gpath)) {
+        f->unlink(gpath);
+    }
+    H5::Group frameno_group = f->createGroup(H5std_string(gpath));
+    H5::DataSet xyze_dset = frameno_group.createDataSet(
+        H5std_string("xyze"), H5::PredType::NATIVE_DOUBLE, xyze_space, xyze_plist);
+    H5::DataSet camrayids_dset = frameno_group.createDataSet(
+        H5std_string("camrayids"), H5::PredType::NATIVE_LONG, camrayids_space, camrayids_plist);
 
-    // Write the data
-    hsize_t row_xyze_dim_vector[RANK] = {4, 1};
-    H5::DataSpace row_xyze_space(RANK, row_xyze_dim_vector);
-    hsize_t row_camrayids_dim_vector[RANK] = {2*maxcams, 1};
-    H5::DataSpace row_camrayids_space(RANK, row_camrayids_dim_vector);
+    if (nmatches == 0) {
+        return;
+    }
 
-    for(unsigned int row = 0; row < matches.size(); row++) {
-        // Prepare row data
-        double xyze_data[4] = {matches[row].matchx, 
-                               matches[row].matchy, 
-                               matches[row].matchz, 
-                               matches[row].matcherror};
-        long camrayids_data[2*maxcams];
-        for(unsigned int idno = 0; idno < maxcams; idno++) {
-            if (matches[row].camrayids.size() > idno) {
-                camrayids_data[2*idno] = matches[row].camrayids[idno].camid;
-                camrayids_data[2*idno+1] = matches[row].camrayids[idno].rayid;
-            } else {
-                camrayids_data[2*idno] = -1;
-                camrayids_data[2*idno+1] = -1;
+    std::vector<double> xyze_buf(static_cast<size_t>(4 * nmatches));
+    std::vector<long> camrayids_buf(static_cast<size_t>(2 * maxcams * nmatches), -1);
+    for (hsize_t row = 0; row < nmatches; ++row) {
+        const candidatematch& m = matches[static_cast<size_t>(row)];
+        xyze_buf[0 * nmatches + row] = m.matchx;
+        xyze_buf[1 * nmatches + row] = m.matchy;
+        xyze_buf[2 * nmatches + row] = m.matchz;
+        xyze_buf[3 * nmatches + row] = m.matcherror;
+        for (unsigned int idno = 0; idno < maxcams; ++idno) {
+            if (idno < m.camrayids.size()) {
+                camrayids_buf[(2 * idno) * nmatches + row] = m.camrayids[idno].camid;
+                camrayids_buf[(2 * idno + 1) * nmatches + row] = m.camrayids[idno].rayid;
             }
         }
+    }
 
-        // Write row
-        hsize_t offset[2] = {0, row};
+    xyze_dset.write(xyze_buf.data(), H5::PredType::NATIVE_DOUBLE);
+    camrayids_dset.write(camrayids_buf.data(), H5::PredType::NATIVE_LONG);
 
-        H5::DataSpace xyze_subspace = xyze_dset.getSpace();
-        xyze_subspace.selectHyperslab(H5S_SELECT_SET, row_xyze_dim_vector, offset);
-        xyze_dset.write(xyze_data, H5::PredType::NATIVE_DOUBLE, row_xyze_space, xyze_subspace);
-
-        H5::DataSpace camrayids_subspace = camrayids_dset.getSpace();
-        camrayids_subspace.selectHyperslab(H5S_SELECT_SET, row_camrayids_dim_vector, offset);
-        camrayids_dset.write(camrayids_data, H5::PredType::NATIVE_LONG, row_camrayids_space, camrayids_subspace);
-
+    if (write_cylinder_aux) {
+        const hsize_t CYR = 2;
+        hsize_t cy_dim[2] = {CYR, nmatches};
+        H5::DataSpace cy_space(2, cy_dim);
+        std::vector<double> cy_buf(static_cast<size_t>(CYR * nmatches));
+        for (hsize_t row = 0; row < nmatches; ++row) {
+            cy_buf[row] = matches[static_cast<size_t>(row)].cylinder_pair_depth_sum;
+            cy_buf[nmatches + row] = matches[static_cast<size_t>(row)].cylinder_min_axis_margin;
+        }
+        H5::DSetCreatPropList cy_plist;
+        if (nmatches > 1) {
+            hsize_t chunk_n = nmatches > 65536 ? 65536 : nmatches;
+            hsize_t cy_chunk[2] = {CYR, chunk_n};
+            cy_plist.setChunk(2, cy_chunk);
+            cy_plist.setDeflate(1);
+        }
+        frameno_group.createDataSet(H5std_string("cylinder_aux"), H5::PredType::NATIVE_DOUBLE, cy_space, cy_plist)
+            .write(cy_buf.data(), H5::PredType::NATIVE_DOUBLE);
     }
 }
 
